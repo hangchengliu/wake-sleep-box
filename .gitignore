@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Build artifacts
+display_name/build/
+*.elf
+*.map
+*.o
+*.d
+
+# Claude settings & runtime traces
+.claude/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary & backup large archives
+backups/*.tar.gz
+backups/flash-*/full_*.bin
+*.tmp
+*~

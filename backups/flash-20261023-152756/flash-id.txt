@@ -1,0 +1,24 @@
+esptool v5.3.1
+Serial port /dev/cu.usbmodem5B790674601:
+Connecting....
+Connected to ESP32-S3 on /dev/cu.usbmodem5B790674601:
+Chip type:          ESP32-S3 (QFN56) (revision v0.2)
+Features:           Wi-Fi, BT 5 (LE), Dual Core + LP Core, 240MHz, Embedded PSRAM 8MB (AP_3v3)
+Crystal frequency:  40MHz
+MAC:                7c:0c:5f:40:12:e0
+
+Uploading stub flasher...
+Running stub flasher...
+Stub flasher running.
+Changing baud rate to 921600...
+Changed.
+
+Flash Memory Information:
+=========================
+Manufacturer: 46
+Device: 4018
+Detected flash size: 16MB
+Flash type set in eFuse: quad (4 data lines)
+Flash voltage set by eFuse: 3.3V
+
+Hard resetting via RTS pin...

@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wake 睡眠环境守夜盒 · 刘航成 & 夏工</title>
+  <style>
+    :root {
+      --bg: #070d19;
+      --card: #10192d;
+      --card-border: #1e2f52;
+      --text: #eef4ff;
+      --muted: #8499c0;
+      --cyan: #22d3ee;
+      --amber: #fbbf24;
+      --orange: #fb923c;
+      --green: #34d399;
+      --red: #f87171;
+      --purple: #c084fc;
+      --indigo: #6366f1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at top, #132142 0%, var(--bg) 68%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 20px 48px;
+    }
+    .container { max-width: 1120px; margin: 0 auto; }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      background: rgba(16, 25, 45, 0.88);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      margin-bottom: 20px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand-badge {
+      width: 46px; height: 46px; border-radius: 13px;
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; box-shadow: 0 0 20px rgba(6, 182, 212, 0.45);
+    }
+    .brand h1 { font-size: 20px; font-weight: 700; }
+    .brand p { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .controls { display: flex; align-items: center; gap: 12px; }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+      background: rgba(248, 113, 113, 0.14); color: var(--red);
+      border: 1px solid rgba(248, 113, 113, 0.35);
+    }
+    .status-pill.connected {
+      background: rgba(52, 211, 153, 0.14); color: var(--green);
+      border-color: rgba(52, 211, 153, 0.4);
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+    button.ble-btn {
+      cursor: pointer; border: none; padding: 10px 20px; border-radius: 12px;
+      font-size: 14px; font-weight: 700; color: #fff;
+      background: linear-gradient(135deg, #2563eb, #06b6d4);
+      box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35);
+      display: flex; align-items: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    button.ble-btn.disconnect {
+      background: linear-gradient(135deg, #dc2626, #ea580c);
+    }
+
+    /* Screen Page Sync Bar */
+    .page-bar {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 14px 20px;
+      background: rgba(16, 25, 45, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 16px; margin-bottom: 20px;
+    }
+    .page-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .page-tab {
+      cursor: pointer; border: 1px solid #2b4270; background: #14203a;
+      color: var(--muted); padding: 8px 14px; border-radius: 10px;
+      font-size: 13px; font-weight: 600; transition: all 0.2s;
+    }
+    .page-tab.active {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: #fff; border-color: #38bdf8;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+    }
+    .view-mode-toggle {
+      display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted);
+      background: #0b1324; padding: 6px 12px; border-radius: 8px; border: 1px solid #1e2f52;
+    }
+    .view-btn {
+      cursor: pointer; background: transparent; border: none; color: var(--muted);
+      font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+    }
+    .view-btn.active {
+      background: #2563eb; color: #fff;
+    }
+
+    .card {
+      background: rgba(16, 25, 45, 0.88);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 20px 22px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+      margin-bottom: 20px;
+      transition: all 0.25s ease;
+    }
+    .card.board-active-card {
+      border-color: #38bdf8;
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.22);
+    }
+    .card.hidden-page {
+      display: none !important;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .card-title { font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .card-tag {
+      font-size: 11px; padding: 3px 8px; border-radius: 6px;
+      background: rgba(255, 255, 255, 0.07); color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .active-badge {
+      display: none; background: rgba(56,189,248,0.2); color: #38bdf8;
+      border: 1px solid #38bdf8; border-radius: 6px; padding: 2px 7px; font-size: 11px;
+    }
+    .board-active-card .active-badge { display: inline-block; }
+
+    /* Wake card */
+    .wake-card { border-color: #312e81; background: linear-gradient(160deg, rgba(20,24,55,0.95), rgba(12,18,36,0.95)); }
+    .wake-grid {
+      display: grid; grid-template-columns: 140px 1fr; gap: 20px; align-items: center;
+      margin-bottom: 16px;
+    }
+    .wake-score-box {
+      background: #090e1c; border: 2px solid #3730a3; border-radius: 16px;
+      padding: 16px; text-align: center;
+    }
+    .wake-score { font-size: 48px; font-weight: 900; color: #818cf8; line-height: 1; }
+    .wake-metrics {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;
+    }
+    .wm {
+      background: #0e172a; border: 1px solid #1e293b; border-radius: 12px;
+      padding: 10px 14px;
+    }
+    .wm span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .wm b { font-size: 20px; font-weight: 700; color: var(--text); }
+    .wm small { font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 400; }
+    .wake-advice {
+      background: #090e1c; border-left: 4px solid #f59e0b; border-radius: 10px;
+      padding: 12px 16px; font-size: 13.5px; color: #e2e8f0; margin-bottom: 14px; line-height: 1.5;
+    }
+    .wake-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .action-btn {
+      cursor: pointer; border: 1px solid transparent; padding: 10px 16px; border-radius: 10px;
+      font-size: 13.5px; font-weight: 600; color: #fff; transition: all 0.2s;
+    }
+
+    /* Sound buttons */
+    .sound-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;
+    }
+    .sound-btn {
+      cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px;
+      padding: 14px 16px; font-size: 14px; font-weight: 600; color: #fff;
+      text-align: left; display: flex; flex-direction: column; gap: 4px;
+      transition: all 0.15s;
+    }
+    .sound-btn:hover { filter: brightness(1.15); }
+    .sound-btn small { font-size: 11px; opacity: 0.8; font-weight: 400; }
+
+    /* Keys */
+    .key-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 10px;
+    }
+    .key-pill {
+      cursor: pointer; background: #0c1527; border: 1px solid #1e293b; border-radius: 12px;
+      padding: 12px 14px; font-size: 14px; font-weight: 700; text-align: center;
+      transition: all 0.15s;
+    }
+    .key-pill:hover { border-color: var(--cyan); background: #132142; }
+    .key-pill.pressed {
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      color: #000; border-color: #fbbf24;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.5);
+    }
+    .key-pill small { display: block; font-size: 11.5px; margin-top: 4px; font-weight: 400; opacity: 0.85; }
+
+    /* External Sensors */
+    .ext-list {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
+    }
+    .ext-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-radius: 12px; background: #090e1c;
+      border: 1px solid #1a2744; font-size: 13.5px;
+    }
+    .badge-on {
+      padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+      background: rgba(52, 211, 153, 0.18); color: var(--green); border: 1px solid rgba(52, 211, 153, 0.35);
+    }
+    .badge-off {
+      padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+      background: rgba(248, 113, 113, 0.18); color: var(--red); border: 1px solid rgba(248, 113, 113, 0.35);
+    }
+
+    /* Microphone meter */
+    .big-num {
+      font-size: 38px; font-weight: 800; color: var(--cyan);
+      display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px;
+    }
+    .big-num .unit { font-size: 18px; color: var(--muted); font-weight: 500; }
+    .meter-bg {
+      height: 12px; border-radius: 6px; background: #0b1324; overflow: hidden;
+      margin-bottom: 12px; border: 1px solid #1a2744;
+    }
+    .meter-fill {
+      height: 100%; width: 10%; background: linear-gradient(90deg, #34d399, #fbbf24, #f87171);
+      transition: width 0.1s linear;
+    }
+    .spark { width: 100%; height: 60px; display: block; margin-top: 8px; }
+
+    /* 16-bar spectrum */
+    .spectrum-grid {
+      display: flex; align-items: flex-end; gap: 4px; height: 90px;
+      padding: 10px; background: #070d1a; border-radius: 10px; border: 1px solid #1e335a;
+      margin-top: 10px;
+    }
+    .spec-bar {
+      flex: 1; background: linear-gradient(to top, #0284c7, #22d3ee);
+      border-radius: 2px; height: 6px; min-height: 4px; transition: height 0.08s ease;
+    }
+
+    /* Cloud expansion details */
+    details.cloud-card {
+      border-color: #38bdf8;
+      background: linear-gradient(160deg, rgba(12,35,64,0.92), rgba(16,25,45,0.92));
+    }
+    details summary {
+      cursor: pointer; font-size: 15px; font-weight: 700; color: #38bdf8;
+      list-style: none; display: flex; align-items: center; justify-content: space-between;
+    }
+    details summary::-webkit-details-marker { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-badge">🌙</div>
+        <div>
+          <h1>Wake 睡眠环境守夜盒 · 刘航成 &amp; 夏工</h1>
+          <p>主控平台：ESP32-S3-Korvo-2 V3 · 硬件级 0 Lux 熄屏 · 专注监测卧室「光、温、噪、起夜」</p>
+        </div>
+      </div>
+      <div class="controls">
+        <div id="statusPill" class="status-pill">
+          <span class="dot"></span>
+          <span id="statusText">未连接蓝牙</span>
+        </div>
+        <button id="connectBtn" class="ble-btn" onclick="toggleBLE()">
+          <span>🔗</span> <span id="btnText">连接开发板蓝牙</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Page Switcher Bar synced with LCD Screen -->
+    <div class="page-bar">
+      <div class="page-tabs">
+        <button class="page-tab active" id="tab-0" onclick="switchPage(0)">1/5 🌙 Wake睡眠盒</button>
+        <button class="page-tab" id="tab-1" onclick="switchPage(1)">2/5 🎙️ 麦克风声谱</button>
+        <button class="page-tab" id="tab-2" onclick="switchPage(2)">3/5 🔊 喇叭音效台</button>
+        <button class="page-tab" id="tab-3" onclick="switchPage(3)">4/5 ⌨️ 板载六按键</button>
+        <button class="page-tab" id="tab-4" onclick="switchPage(4)">5/5 🔌 外接传感器</button>
+      </div>
+      <div class="view-mode-toggle">
+        <span>视图模式:</span>
+        <button class="view-btn active" id="viewModeFocus" onclick="setViewMode('focus')">📱 屏幕同步聚焦</button>
+        <button class="view-btn" id="viewModeAll" onclick="setViewMode('all')">📊 全部平铺一览</button>
+      </div>
+    </div>
+
+    <!-- =========================================================
+         PAGE 0: Wake Sleep Box (Score + 4-D Metrics + Advice + Actions)
+         ========================================================= -->
+    <div class="card wake-card" id="page-card-0">
+      <div class="card-header">
+        <span class="card-title">
+          <span>🌙 1/5 Wake 睡眠环境守夜盒 · 卧室环境综合评估</span>
+          <span class="active-badge">📱 当前开发板屏幕正在显示</span>
+        </span>
+        <span class="card-tag" id="wakeState">待机中</span>
+      </div>
+      <div class="wake-grid">
+        <div class="wake-score-box">
+          <div class="wake-score" id="wakeScore">--</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:4px;">卧室环境健康分 / 100</div>
+        </div>
+        <div class="wake-metrics">
+          <div class="wm"><span>🔊 突发噪音冲击</span><b id="wNoise">--</b><small id="wNoiseMax">次</small></div>
+          <div class="wm"><span>💡 夜间异常漏光</span><b id="wLeak">--</b><small>次</small></div>
+          <div class="wm"><span>🚶 起夜离床活动</span><b id="wWake">--</b><small id="wWakeSec">次</small></div>
+          <div class="wm"><span>🌡️ 卧室室温区间</span><b id="wTemp">--</b><small id="wTempBad"></small></div>
+        </div>
+      </div>
+      <div class="wake-advice" id="wakeAdvice">
+        点击下方「🌙 开始守夜」（或按开发板物理按键 K3 / 关灯持续 10 秒），屏幕背光将被物理断电（0 Lux），开始整夜被动守夜。
+      </div>
+      <div class="wake-actions">
+        <button class="action-btn" style="background:linear-gradient(135deg,#312e81,#4338ca);" onclick="sendCmd('N:1')">🌙 开始守夜（真熄屏）</button>
+        <button class="action-btn" style="background:linear-gradient(135deg,#9a3412,#ea580c);" onclick="triggerMorningReport()">☀️ 早安 · 语音报告 (开发板喇叭)</button>
+        <button class="action-btn" id="boardWhiteNoiseBtn" style="background:linear-gradient(135deg,#065f46,#059669);" onclick="toggleBoardWhiteNoise()">🌧️ 板载助眠白噪音 (3W扬声器)</button>
+        <button class="action-btn" style="background:#1e293b;border-color:#334155;" onclick="sendCmd('W:4')">🧪 模拟起夜</button>
+        <button class="action-btn" style="background:#1e293b;border-color:#334155;" onclick="sendCmd('W:5')">🧪 模拟漏光</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12.5px;color:var(--muted);">
+        <span id="wakeDur"></span>
+        <span>💡 守夜状态下，开发板正面屏幕完全断电（0 Lux），由内部声压包络与光敏状态机静默守护。</span>
+      </div>
+    </div>
+
+    <!-- =========================================================
+         PAGE 1: Dual-Mic Sound Level & 16-Bar Spectrum (ES7210)
+         ========================================================= -->
+    <div class="card" id="page-card-1">
+      <div class="card-header">
+        <span class="card-title">
+          <span>🎙️ 2/5 板载双麦克风实时声压与声谱 (ES7210)</span>
+          <span class="active-badge">📱 当前开发板屏幕正在显示</span>
+        </span>
+        <span class="card-tag">I2C 0x40 · I2S · 双模拟麦 MSM381A</span>
+      </div>
+      <div class="big-num">
+        <span id="dbValue">--.-</span>
+        <span class="unit">dB</span>
+        <span style="margin-left:auto;font-size:18px;color:var(--amber);" id="pctValue">峰值 0%</span>
+      </div>
+      <div class="meter-bg">
+        <div class="meter-fill" id="dbMeter"></div>
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">
+        16-Bar 实时声谱分析（与开发板 LCD 屏上的 16 根彩色动态声谱柱同步）：
+      </div>
+      <div class="spectrum-grid" id="spectrumGrid">
+        <!-- 16 dynamic bars -->
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px;">实时声压走势曲线：</div>
+      <canvas id="dbSpark" class="spark"></canvas>
+    </div>
+
+    <!-- =========================================================
+         PAGE 2: 3W Speaker Soundboard & Hardware White Noise (ES8311)
+         ========================================================= -->
+    <div class="card" id="page-card-2">
+      <div class="card-header">
+        <span class="card-title">
+          <span>🔊 3/5 板载 3W 腔体扬声器中控 (ES8311 + NS4150B)</span>
+          <span class="active-badge">📱 当前开发板屏幕正在显示</span>
+        </span>
+        <span class="card-tag" id="spkStateTag">发声硬件：ESP32-S3 板载扬声器</span>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+        以下 4 个功能 Pad 与开发板第 3 页触摸屏幕 <b>1:1 完全对应</b>，点击将由开发板自身的 3W 扬声器发声：
+      </div>
+      <div class="sound-grid">
+        <button class="sound-btn" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);" onclick="sendCmd('S:1')">
+          <span>🎵 欢迎和弦 (C5-E5-G5-C6)</span>
+          <small>开机清脆琶音 · 板载硬件发声</small>
+        </button>
+        <button class="sound-btn" style="background:linear-gradient(135deg,#15803d,#16a34a);" onclick="sendCmd('S:2')">
+          <span>🔔 叮咚门铃 (E5-C5)</span>
+          <small>轻柔双音门铃提示</small>
+        </button>
+        <button class="sound-btn" id="padWhiteNoiseBtn" style="background:linear-gradient(135deg,#0d9488,#0f766e);" onclick="toggleBoardWhiteNoise()">
+          <span id="padWnTitle">🌧️ 助眠白噪音 (雨夜轻抚)</span>
+          <small id="padWnStatus">点击开关 · 板载算法实时生成粉红噪声</small>
+        </button>
+        <button class="sound-btn" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);" onclick="sendCmd('S:7')">
+          <span>☀️ 晨报普通话真声试听</span>
+          <small>板载 Tingting 词库 · 脱机真人早安播报</small>
+        </button>
+      </div>
+      <div style="margin-top:16px;display:flex;align-items:center;gap:12px;background:#090e1c;padding:12px 16px;border-radius:12px;border:1px solid #1a2744;">
+        <span style="font-size:13px;color:var(--muted);">🔈 开发板硬件音量: <b id="volLabel" style="color:var(--text);">80%</b></span>
+        <input type="range" min="0" max="100" value="80" style="flex:1;accent-color:var(--cyan);" onchange="sendCmd('V:' + this.value); document.getElementById('volLabel').textContent = this.value + '%';" />
+      </div>
+    </div>
+
+    <!-- =========================================================
+         PAGE 3: 6 ADC Physical Keys Matrix (GPIO 5)
+         ========================================================= -->
+    <div class="card" id="page-card-3">
+      <div class="card-header">
+        <span class="card-title">
+          <span>⌨️ 4/5 板载 ADC 六按键物理矩阵 (GPIO 5)</span>
+          <span class="active-badge">📱 当前开发板屏幕正在显示</span>
+        </span>
+        <span class="card-tag" id="mvTag">ADC: ---- mV</span>
+      </div>
+      <div style="font-size:13px;color:var(--muted);">
+        开发板侧边 6 颗微动开关通过单引脚电阻分压精准检测。物理按压开发板按键时网页实时高亮；点击下方虚拟按键可远程触发等效动作：
+      </div>
+      <div class="key-grid">
+        <div class="key-pill" id="key-1" onclick="sendCmd('K:1')">
+          K1 (VOL+)<br/><small>⬅️ 屏幕翻到上一页</small>
+        </div>
+        <div class="key-pill" id="key-2" onclick="sendCmd('K:2')">
+          K2 (VOL-)<br/><small>➡️ 屏幕翻到下一页</small>
+        </div>
+        <div class="key-pill" id="key-3" onclick="sendCmd('K:3')">
+          K3 (SET)<br/><small>🌙 开始守夜（真熄屏）</small>
+        </div>
+        <div class="key-pill" id="key-4" onclick="sendCmd('K:4')">
+          K4 (PLAY)<br/><small>🌧️ 助眠白噪音 (守夜时模拟起夜)</small>
+        </div>
+        <div class="key-pill" id="key-5" onclick="sendCmd('K:5')">
+          K5 (MUTE)<br/><small>🔔 门铃音效 (守夜时模拟漏光)</small>
+        </div>
+        <div class="key-pill" id="key-6" onclick="sendCmd('K:6')">
+          K6 (REC)<br/><small>☀️ 早安晨报 (脱机真人声播报)</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================
+         PAGE 4: External Sensors Auto-Detection
+         ========================================================= -->
+    <div class="card" id="page-card-4">
+      <div class="card-header">
+        <span class="card-title">
+          <span>🔌 5/5 外接扩展传感器状态 (自动在位检测)</span>
+          <span class="active-badge">📱 当前开发板屏幕正在显示</span>
+        </span>
+        <span class="card-tag">共享 I2C (17/18) + GPIO 19/20</span>
+      </div>
+      <div class="ext-list">
+        <div class="ext-item">
+          <div>
+            <b>🚶 AM412 人体红外 PIR</b><br/>
+            <small style="color:var(--muted);">GPIO 19 · 无感监测夜间离床起夜</small>
+          </div>
+          <span id="extPir" class="badge-off">未触发 (安静)</span>
+        </div>
+        <div class="ext-item">
+          <div>
+            <b>☀️ BH1750 环境光敏计</b><br/>
+            <small style="color:var(--muted);">I2C 0x23 · 关灯入睡识别与夜间漏光</small>
+          </div>
+          <span id="extLux" class="badge-off">未接入 (离线)</span>
+        </div>
+        <div class="ext-item">
+          <div>
+            <b>🌡️ SPA06 温度传感器</b><br/>
+            <small style="color:var(--muted);">I2C 0x76 · 追踪后半夜室温漂移</small>
+          </div>
+          <span id="extTemp" class="badge-off">未接入 (离线)</span>
+        </div>
+        <div class="ext-item">
+          <div>
+            <b>🧭 SPA06 气压传感器</b><br/>
+            <small style="color:var(--muted);">I2C 0x76 · 辅助判定门窗开合强对流</small>
+          </div>
+          <span id="extPres" class="badge-off">未接入 (离线)</span>
+        </div>
+        <div class="ext-item">
+          <div>
+            <b>💡 WS2812 琥珀柔光灯环</b><br/>
+            <small style="color:var(--muted);">GPIO 20 · 起夜微光照明不抑褪黑素</small>
+          </div>
+          <span id="extLed" class="badge-on">就绪</span>
+        </div>
+        <div class="ext-item">
+          <div>
+            <b>⚡ TCA9554 背光物理电源</b><br/>
+            <small style="color:var(--muted);">I2C 0x38 Bit 1 · 硬件级 0 Lux 断电</small>
+          </div>
+          <span id="extBacklight" class="badge-on">正常供电</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================
+         CLOUD & PC EXPANSION: Auxiliary Analysis (ชัดเจนว่าเป็นฟังก์ชันเสริม)
+         ========================================================= -->
+    <details class="card cloud-card" open style="margin-top:24px;">
+      <summary>
+        <span>☁️ 上位机扩展分析专区（Dashboard 增值赋能 · 辅助开发板）</span>
+        <span style="font-size:12px;font-weight:400;color:var(--muted);">点击折叠/展开 ▼</span>
+      </summary>
+      <div style="font-size:13px;color:var(--muted);margin:12px 0;">
+        💡 <b>架构定位说明：</b>开发板是独立运行在床头的核心设备，已完成全部声光电感知、守夜打分与脱机真人晨报。电脑端 Dashboard 作为高级分析台，支持融合手环生理数据与调用大模型进行二次深度洞察：
+      </div>
+
+      <!-- Expansion 1: Apple Watch x Wake Cross-Validation -->
+      <div style="background:#070d1a;padding:16px;border-radius:14px;border:1px solid #1e335a;margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:700;color:#38bdf8;margin-bottom:4px;">
+          ⌚ Apple Watch 睡眠周期 × Wake 卧室环境异常 · 交叉印证
+        </div>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">
+          手环测到你凌晨 03:18 清醒，Wake 盒子记录 03:15 窗外有 64dB 突发噪音，形成完整因果链：
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;color:#94a3b8;margin-bottom:8px;">
+          <span>23:00 入睡</span><span>01:00</span><span>03:00</span><span>05:00</span><span>07:00 晨起</span>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11.5px;font-weight:700;color:#c084fc;margin-bottom:3px;">⌚ Apple Watch 睡眠分期 (手环生理数据)</div>
+          <div style="height:20px;border-radius:6px;background:#1e1b4b;display:flex;overflow:hidden;position:relative;">
+            <div style="width:25%;background:#4338ca;" title="深睡"></div>
+            <div style="width:30%;background:#3730a3;" title="核心睡眠"></div>
+            <div style="width:4%;background:#ef4444;box-shadow:0 0 10px #ef4444;" title="异常清醒 (03:18)"></div>
+            <div style="width:23%;background:#3730a3;" title="核心睡眠"></div>
+            <div style="width:18%;background:#6366f1;" title="REM 快速眼动"></div>
+          </div>
+          <div style="font-size:11px;color:#f87171;margin-top:2px;margin-left:55%;">▲ 03:18 心率上升异常清醒</div>
+        </div>
+        <div>
+          <div style="font-size:11.5px;font-weight:700;color:#22d3ee;margin-bottom:3px;">🌙 Wake 睡眠盒 (卧室环境异常记录)</div>
+          <div style="height:20px;border-radius:6px;background:#0c213d;display:flex;align-items:center;position:relative;border:1px dashed #1e40af;">
+            <div style="position:absolute;left:53%;width:16px;height:16px;border-radius:50%;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:900;">🔊</div>
+            <div style="position:absolute;left:75%;width:16px;height:16px;border-radius:50%;background:#eab308;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:900;">💡</div>
+          </div>
+          <div style="font-size:11px;color:#fbbf24;margin-top:2px;margin-left:51%;">▲ 03:15 窗外突发 64dB 噪音</div>
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);font-size:12.5px;color:#bae6fd;">
+          💡 <b>交叉印证结论：</b>你的早醒不是神经衰弱，而是卧室隔音不良。建议睡前关紧窗户或佩戴耳塞。
+        </div>
+      </div>
+
+      <!-- Expansion 2 & 3: Dream Journal & Voice Remote Control -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:16px;">
+        <!-- Dream Journal -->
+        <div style="background:#070d1a;padding:16px;border-radius:14px;border:1px solid #1e335a;">
+          <div style="font-size:14px;font-weight:700;color:#c084fc;margin-bottom:6px;">
+            💭 清晨记梦本 (Voice Dream Journal & AI 梦境解析)
+          </div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">
+            醒来口述梦境，AI 结合当晚卧室环境得分（<b id="dreamScoreTag">-- 分</b>）提供多维情绪映射：
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input type="text" id="dreamInput" placeholder="输入昨晚的梦，例如：梦见在大海航行，突然闹钟响了..." style="flex:1;background:#0b1324;border:1px solid #283a65;border-radius:10px;padding:9px 12px;color:#fff;font-size:13px;" />
+            <button class="ble-btn" style="padding:8px 14px;" onclick="interpretDream()">✨ AI 解梦</button>
+          </div>
+          <div id="dreamResult" style="padding:10px 12px;border-radius:10px;background:#131d35;font-size:12.5px;color:#e2e8f0;line-height:1.6;min-height:50px;">
+            💬 输入梦境后点击「AI 解梦」，系统将结合昨晚环境深度解析。
+          </div>
+        </div>
+
+        <!-- Voice Assistant Remote Control -->
+        <div style="background:#070d1a;padding:16px;border-radius:14px;border:1px solid #1e335a;">
+          <div style="font-size:14px;font-weight:700;color:#22d3ee;margin-bottom:6px;">
+            🎤 上位机语音遥控 (Web Speech to BLE)
+          </div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">
+            用电脑麦克风说话，语音转指令通过蓝牙下发给开发板（如“开始守夜”、“放雨声”、“早安”）：
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input type="text" id="vaText" placeholder="说话或在这里输入指令，例如：开始守夜" onkeydown="if(event.key==='Enter')vaSubmitText()" style="flex:1;background:#0b1324;border:1px solid #283a65;border-radius:10px;padding:9px 12px;color:#fff;font-size:13px;" />
+            <button class="ble-btn" style="padding:8px 14px;" onclick="vaSubmitText()">发送</button>
+          </div>
+          <div id="vaLog" style="height:68px;overflow:auto;padding:8px 12px;border-radius:10px;background:#0b1324;font-size:12.5px;line-height:1.6;color:#94a3b8;">
+            等待语音或文本指令...
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <script>
+    const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+    const CHAR_UUID    = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+    let bleDevice = null;
+    let bleChar = null;
+    const dbHist = [];
+    let curPageIdx = 0;
+    let viewMode = 'focus'; // 'focus' (1:1 with board) or 'all' (overview grid)
+    let boardWhiteNoise = false;
+
+    // Generate 16 bars for spectrum
+    const specContainer = document.getElementById('spectrumGrid');
+    for (let i = 0; i < 16; i++) {
+      const b = document.createElement('div');
+      b.className = 'spec-bar';
+      b.id = 'spec-' + i;
+      specContainer.appendChild(b);
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      document.getElementById('viewModeFocus').classList.toggle('active', mode === 'focus');
+      document.getElementById('viewModeAll').classList.toggle('active', mode === 'all');
+      updatePageVisibility();
+    }
+
+    function switchPage(p) {
+      curPageIdx = p;
+      sendCmd('P:' + p);
+      updatePageVisibility();
+    }
+
+    function updatePageVisibility() {
+      for (let i = 0; i < 5; i++) {
+        const tab = document.getElementById('tab-' + i);
+        if (tab) tab.classList.toggle('active', curPageIdx === i);
+        const card = document.getElementById('page-card-' + i);
+        if (card) {
+          card.classList.toggle('board-active-card', curPageIdx === i);
+          if (viewMode === 'focus') {
+            card.classList.toggle('hidden-page', curPageIdx !== i);
+          } else {
+            card.classList.remove('hidden-page');
+          }
+        }
+      }
+    }
+
+    async function toggleBLE() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+        return;
+      }
+      try {
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [SERVICE_UUID] }, { namePrefix: 'Korvo' }],
+          optionalServices: [SERVICE_UUID]
+        });
+        bleDevice.addEventListener('gattserverdisconnected', () => setConnectedUI(false));
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        bleChar = await service.getCharacteristic(CHAR_UUID);
+        await bleChar.startNotifications();
+        bleChar.addEventListener('characteristicvaluechanged', e => {
+          handlePayload(new TextDecoder().decode(e.target.value));
+        });
+        const initVal = await bleChar.readValue();
+        handlePayload(new TextDecoder().decode(initVal));
+        setConnectedUI(true);
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    function setConnectedUI(connected) {
+      const pill = document.getElementById('statusPill');
+      const statusText = document.getElementById('statusText');
+      const btn = document.getElementById('connectBtn');
+      const btnText = document.getElementById('btnText');
+      if (connected) {
+        pill.classList.add('connected');
+        statusText.textContent = '已连接 · ' + (bleDevice ? bleDevice.name : 'ESP32-S3');
+        btn.classList.add('disconnect');
+        btnText.textContent = '断开蓝牙';
+      } else {
+        pill.classList.remove('connected');
+        statusText.textContent = '未连接蓝牙';
+        btn.classList.remove('disconnect');
+        btnText.textContent = '连接开发板蓝牙';
+      }
+    }
+
+    const ADVICE = [
+      '点击「开始守夜」（或按开发板 K3 / 关灯 10 秒），屏幕会熄灭并开始整夜监测房间。',
+      '昨晚卧室环境很好：整夜安静、无漏光、温度舒适，继续保持！',
+      '主要问题：夜间突发噪音。建议睡前关紧窗户，或使用耳塞 / 白噪音遮蔽。',
+      '主要问题：夜间或清晨漏光。建议拉严遮光帘，遮住充电器、路由器指示灯。',
+      '主要问题：起夜偏多。建议睡前 1 小时少喝水，起夜时只开微弱暖光。',
+      '主要问题：室温偏离 16–25°C 舒适区。建议睡前把空调定在 20–22°C。'
+    ];
+    function fmtSec(s) { s = Number(s || 0); return s >= 60 ? `${Math.floor(s / 60)}分${s % 60}秒` : `${s}秒`; }
+    let lastWake = null;
+    let lastSensor = null;
+
+    function handleWake(d) {
+      lastWake = d;
+      const st = document.getElementById('wakeState');
+      if (d.night) { st.textContent = '🌙 守夜中 · 屏幕已熄灭'; st.style.color = '#a5b4fc'; }
+      else if (d.rep) { st.textContent = '☀️ 晨间报告已生成'; st.style.color = '#fbbf24'; }
+      else { st.textContent = '待机中'; st.style.color = ''; }
+
+      const live = d.night === 1;
+      const show = live || d.rep === 1;
+      const sc = document.getElementById('wakeScore');
+      if (d.rep && !live) {
+        sc.textContent = d.score;
+        sc.style.color = d.score >= 85 ? '#34d399' : (d.score >= 65 ? '#fbbf24' : '#f87171');
+        document.getElementById('dreamScoreTag').textContent = d.score + ' 分';
+      } else {
+        sc.textContent = live ? '…' : '--';
+        sc.style.color = '#818cf8';
+      }
+      document.getElementById('wNoise').textContent = show ? d.ne : '--';
+      document.getElementById('wNoiseMax').textContent = show && d.ne > 0 ? `次 · 峰值 ${Number(d.nmax).toFixed(0)}dB` : '次';
+      document.getElementById('wLeak').textContent = show ? d.le : '--';
+      document.getElementById('wWake').textContent = show ? d.we : '--';
+      document.getElementById('wWakeSec').textContent = show ? `次 · ${fmtSec(d.wsec)}${d.wact ? ' (进行中)' : ''}` : '次';
+      if (show && d.tmax > 0) {
+        document.getElementById('wTemp').textContent = `${Number(d.tmin).toFixed(1)}~${Number(d.tmax).toFixed(1)}°C`;
+        document.getElementById('wTempBad').textContent = d.tbad > 0 ? `越界 ${fmtSec(d.tbad)}` : '';
+      } else {
+        document.getElementById('wTemp').textContent = show ? '未接入' : '--';
+        document.getElementById('wTempBad').textContent = '';
+      }
+      document.getElementById('wakeAdvice').textContent = live
+        ? '🌙 正在守夜：拍手 / 敲桌模拟噪音，晃动 PIR 或点「模拟起夜」，用手电照光传感器或点「模拟漏光」。'
+        : ADVICE[d.rep ? d.adv : 0];
+      document.getElementById('wakeDur').textContent = show ? `守夜时长：${fmtSec(d.dur)}` : '';
+
+      if (d.wn !== undefined) updateWhiteNoiseUI(d.wn === 1);
+      const bl = document.getElementById('extBacklight');
+      if (bl) {
+        bl.textContent = d.night ? '0 Lux 硬件断电' : '正常供电';
+        bl.className = d.night ? 'badge-off' : 'badge-on';
+      }
+    }
+
+    function updateWhiteNoiseUI(active) {
+      boardWhiteNoise = active;
+      const bBtn = document.getElementById('boardWhiteNoiseBtn');
+      if (bBtn) {
+        bBtn.textContent = active ? '⏹️ 停止助眠白噪音 (板载播放中)' : '🌧️ 板载助眠白噪音 (3W扬声器)';
+        bBtn.style.background = active ? 'linear-gradient(135deg,#b45309,#d97706)' : 'linear-gradient(135deg,#065f46,#059669)';
+      }
+      const padTitle = document.getElementById('padWnTitle');
+      const padStatus = document.getElementById('padWnStatus');
+      const padBtn = document.getElementById('padWhiteNoiseBtn');
+      if (padBtn) {
+        padBtn.style.background = active ? 'linear-gradient(135deg,#d97706,#b45309)' : 'linear-gradient(135deg,#0d9488,#0f766e)';
+      }
+      if (padTitle) padTitle.textContent = active ? '⏹️ 停止助眠白噪音 (播放中)' : '🌧️ 助眠白噪音 (雨夜轻抚)';
+      if (padStatus) padStatus.textContent = active ? '板载 3W 扬声器正在发声 · 点击停止' : '板载算法实时生成粉红噪声 · 点击开启';
+    }
+
+    function toggleBoardWhiteNoise() {
+      sendCmd(boardWhiteNoise ? 'B:0' : 'B:1');
+    }
+
+    function handlePayload(str) {
+      try {
+        const d = JSON.parse(str);
+        if (d.w === 1) { handleWake(d); return; }
+        lastSensor = d;
+
+        // 1. Sync Page with Board
+        if (d.page !== undefined && d.page !== curPageIdx) {
+          curPageIdx = d.page;
+          updatePageVisibility();
+        }
+
+        // White noise sync
+        if (d.wn !== undefined) updateWhiteNoiseUI(d.wn === 1);
+
+        // 2. Mic dB & Spectrum
+        const db = Number(d.db || 35);
+        document.getElementById('dbValue').textContent = db.toFixed(1);
+        document.getElementById('pctValue').textContent = `峰值 ${d.pct || 0}%`;
+        const meterPct = Math.min(100, Math.max(5, ((db - 30) / 65) * 100));
+        document.getElementById('dbMeter').style.width = meterPct + '%';
+
+        // Animate 16-bar spectrum based on dB & peak
+        const baseH = Math.max(4, (db - 30) * 1.3);
+        for (let i = 0; i < 16; i++) {
+          const bar = document.getElementById('spec-' + i);
+          if (bar) {
+            const jitter = Math.sin(Date.now() / 150 + i * 0.8) * 12 + Math.random() * 8;
+            const h = Math.min(84, Math.max(4, baseH + jitter * (d.pct / 40.0)));
+            bar.style.height = h + 'px';
+          }
+        }
+
+        dbHist.push(db);
+        if (dbHist.length > 60) dbHist.shift();
+        drawSpark('dbSpark', dbHist, '#22d3ee', 30, 92);
+
+        // 3. ADC 6 Keys
+        document.getElementById('mvTag').textContent = `ADC: ${d.mv} mV`;
+        for (let k = 1; k <= 6; k++) {
+          const el = document.getElementById('key-' + k);
+          if (el) el.classList.toggle('pressed', d.key === k);
+        }
+
+        // 4. External sensors online/offline
+        const pirEl = document.getElementById('extPir');
+        pirEl.textContent = d.pir ? '检测到有人!' : '未触发 (安静)';
+        pirEl.className = d.pir ? 'badge-on' : 'badge-off';
+
+        const luxEl = document.getElementById('extLux');
+        if (d.lux >= 0) {
+          luxEl.textContent = `${d.lux} lx (在线)`;
+          luxEl.className = 'badge-on';
+        } else {
+          luxEl.textContent = '未接入 (离线)';
+          luxEl.className = 'badge-off';
+        }
+
+        const tempEl = document.getElementById('extTemp');
+        const presEl = document.getElementById('extPres');
+        if (d.spa) {
+          tempEl.textContent = `${Number(d.temp).toFixed(1)} °C (在线)`;
+          tempEl.className = 'badge-on';
+          presEl.textContent = `${Number(d.pres).toFixed(1)} hPa (在线)`;
+          presEl.className = 'badge-on';
+        } else {
+          tempEl.textContent = '未接入 (离线)';
+          tempEl.className = 'badge-off';
+          presEl.textContent = '未接入 (离线)';
+          presEl.className = 'badge-off';
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    function drawSpark(canvasId, data, color, minV, maxV) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || data.length < 2) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const w = rect.width, h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.beginPath();
+      data.forEach((v, i) => {
+        const x = (i / 59) * w;
+        const y = h - 6 - ((v - minV) / (maxV - minV)) * (h - 12);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+    }
+
+    function triggerMorningReport() {
+      sendCmd('N:2'); // 让开发板自身的 3W 喇叭独立播报早安真人声
+    }
+
+    // 记梦本解析
+    const DREAM_RULES = [
+      { keys: ['海', '水', '游泳', '河', '湖'], tag: '水 / 海', mood: '情绪流动', note: '水常对应情绪与潜意识。平静的水代表内心安定，汹涌的水说明近期有尚未消化的情绪。' },
+      { keys: ['飞', '飘', '坠', '掉', '落'], tag: '飞行 / 坠落', mood: '掌控感', note: '飞行多与自由和掌控感有关；坠落则常出现在压力较大、想要放手或担心失控的时期。' },
+      { keys: ['追', '逃', '跑', '躲'], tag: '追逐 / 逃跑', mood: '回避压力', note: '被追赶通常映射被搁置的任务或情绪。试着想想最近在回避什么，把它拆成一小步先做。' },
+      { keys: ['考试', '迟到', '作业', '答不出'], tag: '考试 / 迟到', mood: '表现焦虑', note: '这类梦很常见，反映对表现和评价的担心，并不代表真的会出问题。' },
+      { keys: ['闹钟', '铃', '起不来', '醒不'], tag: '闹钟 / 醒不来', mood: '睡眠压力', note: '外界声音被编进梦境是常见现象，说明睡眠后段较浅，容易被环境信号打断。' }
+    ];
+    function interpretDream() {
+      const text = document.getElementById('dreamInput').value.trim();
+      const box = document.getElementById('dreamResult');
+      if (!text) { box.textContent = '💬 请先输入一段梦境，哪怕只有几个词也可以。'; return; }
+      const hits = DREAM_RULES.filter(r => r.keys.some(k => text.includes(k)));
+      const d = lastWake && lastWake.rep ? lastWake : null;
+      let html = '';
+      if (hits.length) {
+        html += `<b>🔍 意象：</b>${hits.map(h => h.tag).join('、')}<br/>`;
+        html += `<b>🧭 情绪指向：</b>${hits.map(h => h.mood).join('、')}<br/>`;
+        html += hits.map(h => `· ${h.note}`).join('<br/>') + '<br/>';
+      } else {
+        html += '<b>🔍 意象：</b>没有匹配到常见意象。不妨记下梦里最强烈的那种感受。<br/>';
+      }
+      if (d) {
+        const rest = d.score >= 85 ? '昨晚卧室环境很好，睡眠修复度高，梦境通常较平和。'
+          : d.score >= 65 ? '昨晚环境有些小干扰，睡眠修复度中等。'
+          : '昨晚环境干扰较多，睡眠修复度偏低，梦里的不安感可能被环境噪音放大。';
+        html += `<b>🌙 结合昨晚环境（${d.score} 分）：</b>${rest}`;
+      }
+      box.innerHTML = html;
+    }
+
+    // 语音助手
+    function vaSubmitText() {
+      const input = document.getElementById('vaText');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      const log = document.getElementById('vaLog');
+      log.innerHTML = `<div><b>你：</b>${text}</div>` + log.innerHTML;
+      if (/守夜|睡觉|睡眠/.test(text)) {
+        sendCmd('N:1');
+        log.innerHTML = `<div style="color:var(--cyan);"><b>Wake：</b>已通过 BLE 指令让开发板进入守夜熄屏模式。</div>` + log.innerHTML;
+      } else if (/早安|晨报|复盘/.test(text)) {
+        sendCmd('N:2');
+        log.innerHTML = `<div style="color:var(--cyan);"><b>Wake：</b>已命令开发板 3W 喇叭独立播报早安晨报。</div>` + log.innerHTML;
+      } else if (/雨|白噪音/.test(text)) {
+        toggleBoardWhiteNoise();
+        log.innerHTML = `<div style="color:var(--cyan);"><b>Wake：</b>已切换开发板板载助眠白噪音。</div>` + log.innerHTML;
+      } else if (/起夜/.test(text)) {
+        sendCmd('W:4');
+        log.innerHTML = `<div style="color:var(--cyan);"><b>Wake：</b>已向开发板下发模拟起夜事件。</div>` + log.innerHTML;
+      } else {
+        log.innerHTML = `<div style="color:var(--muted);"><b>Wake：</b>可输入“开始守夜”、“早安晨报”、“白噪音”、“起夜测试”。</div>` + log.innerHTML;
+      }
+    }
+
+    async function sendCmd(cmd) {
+      if (!bleChar) return;
+      try {
+        await bleChar.writeValue(new TextEncoder().encode(cmd));
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    // Initial view sync
+    updatePageVisibility();
+  </script>
+</body>
+</html>
