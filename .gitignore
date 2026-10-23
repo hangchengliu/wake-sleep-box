@@ -18,8 +18,18 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Temporary & backup large archives
-backups/*.tar.gz
-backups/flash-*/full_*.bin
+# Temporary & backup: 整片 Flash 镜像、分区切片、otadata、烧录文件 —— 含硬件序列号与会话数据
+backups/
+backup_otadata.bin
+otadata_ota1.bin
+*.tar.gz
 *.tmp
 *~
+
+# 密钥与个人数据: 绝不能进 git
+voice_relay/.env
+voice_relay/*.env
+voice_relay/notes.jsonl
+voice_relay/probe_*.wav
+voice_relay/test_*.jsonl
+display_name/wifi_secrets.h

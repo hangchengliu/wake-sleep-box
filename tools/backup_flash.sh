@@ -15,7 +15,10 @@ mkdir -p "$OUT"
 echo "== 1/4 芯片与 Flash 信息 (只读) =="
 "$ESPTOOL" --chip esp32s3 --port "$PORT" --baud 921600 flash-id | tee "$OUT/flash-id.txt"
 
-echo "== 2/4 读取整片 16MB (约 5~8 分钟，波特率 460800) =="
+echo "等待 3 秒后开始读取..."
+sleep 3
+
+echo "== 2/4 读取整片 16MB (460800 约 6~8 分钟) =="
 "$ESPTOOL" --chip esp32s3 --port "$PORT" --baud 460800 read-flash 0x0 0x1000000 "$FULL"
 
 SIZE=$(stat -f %z "$FULL")
@@ -24,7 +27,7 @@ if [[ "$SIZE" != "16777216" ]]; then
   exit 3
 fi
 
-echo "== 3/4 与芯片内容比对 (verify-flash，只读，波特率 460800) =="
+echo "== 3/4 与芯片内容比对 (verify-flash，只读，460800) =="
 if "$ESPTOOL" --chip esp32s3 --port "$PORT" --baud 460800 verify-flash 0x0 "$FULL"; then
   echo "校验通过: 镜像与芯片内容一致。"
 else

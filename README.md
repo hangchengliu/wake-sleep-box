@@ -1,4 +1,9 @@
 # 🌙 Wake 睡眠环境守夜盒 · 项目工程与技术全景文档
+
+<p align="center">
+  <a href="README_EN.md"><b>English</b></a> | <a href="README.md"><b>简体中文</b></a>
+</p>
+
 > **Project Wake: Ambient Sleep Hygiene & Bedroom Environment Monitor**  
 > 开发者：**刘航成 & 夏工**  
 > 主控平台：**ESP32-S3-Korvo-2 V3 (KSDIY Edition)**  
