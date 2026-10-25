@@ -198,10 +198,12 @@ static void set_backlight(bool on) {
     i2c_write_reg(tca_addr, 0x01, out);
 }
 
-// WS2812 ring: only used as a dim amber night-light when someone gets up at night.
+// WS2812 ring: 8 RGB LEDs on GPIO 20 (RMT driven)
 static bool ws_ready = false;
 static int ws_last_level = -1;
-static void ws2812_set_all(uint8_t r, uint8_t g, uint8_t b, int count) {
+static uint8_t ws_led_colors[WS2812_NUM][3] = {0}; // [r, g, b] per LED
+
+static void ws2812_commit() {
     if (!ws_ready) {
         ws_ready = rmtInit(WS2812_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_4, 10000000);
         if (ws_ready) rmtSetEOT(WS2812_PIN, LOW);
@@ -210,8 +212,8 @@ static void ws2812_set_all(uint8_t r, uint8_t g, uint8_t b, int count) {
     static rmt_data_t data[WS2812_NUM * 24];
     int idx = 0;
     for (int n = 0; n < WS2812_NUM; n++) {
-        uint8_t grb[3] = {0, 0, 0};
-        if (n < count) { grb[0] = g; grb[1] = r; grb[2] = b; }
+        // WS2812 byte order is Green, Red, Blue
+        uint8_t grb[3] = {ws_led_colors[n][1], ws_led_colors[n][0], ws_led_colors[n][2]};
         for (int c = 0; c < 3; c++) {
             for (int bit = 7; bit >= 0; bit--) {
                 bool one = grb[c] & (1 << bit);
@@ -222,6 +224,30 @@ static void ws2812_set_all(uint8_t r, uint8_t g, uint8_t b, int count) {
         }
     }
     rmtWrite(WS2812_PIN, data, WS2812_NUM * 24, RMT_WAIT_FOR_EVER);
+}
+
+static void ws2812_set_all(uint8_t r, uint8_t g, uint8_t b, int count) {
+    for (int n = 0; n < WS2812_NUM; n++) {
+        if (n < count) {
+            ws_led_colors[n][0] = r;
+            ws_led_colors[n][1] = g;
+            ws_led_colors[n][2] = b;
+        } else {
+            ws_led_colors[n][0] = 0;
+            ws_led_colors[n][1] = 0;
+            ws_led_colors[n][2] = 0;
+        }
+    }
+    ws2812_commit();
+}
+
+static void ws2812_set_led(int index, uint8_t r, uint8_t g, uint8_t b) {
+    if (index >= 0 && index < WS2812_NUM) {
+        ws_led_colors[index][0] = r;
+        ws_led_colors[index][1] = g;
+        ws_led_colors[index][2] = b;
+        ws2812_commit();
+    }
 }
 
 static void night_light(bool on) {
@@ -516,7 +542,6 @@ static void voice_task_fn(void *arg) {
             }
             size_t bw = 0;
             i2s_channel_write(tx_handle, buf, 256 * 4, &bw, 50);
-            last_sound_end_ms = millis();
         } else {
             vTaskDelay(pdMS_TO_TICKS(15));
         }
@@ -612,16 +637,23 @@ static void play_sound_effect(int effect_id) {
     }
 }
 
+// 语音对话(Wi-Fi 配网 + 说话检测 + 上传录音 + 播放回复)。必须放在它依赖的全局变量声明之后。
+#include "voice_chat.h"
+
 static void poll_microphone() {
     if (!audio_ok || !rx_handle) return;
     int16_t pcm[256 * 2];
     size_t bytes_read = 0;
     if (i2s_channel_read(rx_handle, pcm, sizeof(pcm), &bytes_read, 5) == ESP_OK && bytes_read >= 64) {
         int frames = bytes_read / 4;
-        // Remove DC offset first
-        int64_t sum_l = 0;
-        for (int i = 0; i < frames; i++) sum_l += pcm[i * 2];
+        // Remove DC offset for both Left and Right channels
+        int64_t sum_l = 0, sum_r = 0;
+        for (int i = 0; i < frames; i++) {
+            sum_l += pcm[i * 2];
+            sum_r += pcm[i * 2 + 1];
+        }
         int32_t mean_l = (int32_t)(sum_l / frames);
+        int32_t mean_r = (int32_t)(sum_r / frames);
 
         double sum_sq = 0;
         int32_t max_abs = 0;
@@ -632,7 +664,9 @@ static void poll_microphone() {
             for (int j = 0; j < seg_len; j++) {
                 int idx = b * seg_len + j;
                 if (idx < frames) {
-                    int32_t v = abs((int32_t)pcm[idx * 2] - mean_l);
+                    int32_t vl = abs((int32_t)pcm[idx * 2] - mean_l);
+                    int32_t vr = abs((int32_t)pcm[idx * 2 + 1] - mean_r);
+                    int32_t v = max(vl, vr);
                     seg_sum += v;
                     sum_sq += (double)v * (double)v;
                     if (v > max_abs) max_abs = v;
@@ -654,8 +688,16 @@ static void poll_microphone() {
             if (db < 32.0f) db = 32.0f;
             if (db > 96.0f) db = 96.0f;
         }
-        cur_db = cur_db * 0.65f + db * 0.35f;
+
+        // Fast attack, smooth decay for responsive noise & transient detection (claps, knocks, speech)
+        if (db > cur_db) {
+            cur_db = cur_db * 0.25f + db * 0.75f; // Fast attack
+        } else {
+            cur_db = cur_db * 0.85f + db * 0.15f; // Smooth decay
+        }
+
         cur_peak_pct = min(100, (int)((max_abs * 100) / 12000));
+        chat_feed_left(pcm, frames);          // 喂给语音对话检测
     }
 }
 
@@ -800,8 +842,8 @@ static void start_night(uint32_t now) {
     night_mode = true;
     auto_armed = false;
     night_start_ms = millis();
-    night_grace_until = night_start_ms + 1500;
-    noise_baseline = cur_db;
+    night_grace_until = night_start_ms + 4000; // 宽限期 4 秒，等待晚安语音播完
+    noise_baseline = 36.0f;                    // 预设正常卧室安静底噪 36dB，避免将开播提示音记录为底噪！
     Serial.println("[Wake] Night watch started");
 }
 
@@ -857,21 +899,26 @@ static void update_wake_engine(uint32_t now) {
     }
 
     // ---- 1. Noise events (mic envelope only, never recorded) ----
-    bool own_sound = (now - last_sound_end_ms < 900);
-    if (!own_sound && now <= night_grace_until) {
-        // Grace window: converge quickly on the room's real noise floor
-        // (the start-of-night tones may have leaked into the mic).
-        noise_baseline = noise_baseline * 0.9f + cur_db * 0.1f;
-    }
+    bool own_sound = (now - last_sound_end_ms < 1000) || voice_playing;
     if (!own_sound && now > night_grace_until) {
-        float thresh = max(noise_baseline + 12.0f, 50.0f);
-        if (cur_db > thresh && now - last_noise_ev_ms > 3000) {
+        // 自适应房间环境底噪追踪 (合理卧室区间 30dB ~ 50dB)
+        if (cur_db < noise_baseline + 6.0f) {
+            noise_baseline = noise_baseline * 0.98f + cur_db * 0.02f;
+        } else if (cur_db < noise_baseline) {
+            noise_baseline = cur_db;
+        }
+        noise_baseline = constrain(noise_baseline, 30.0f, 50.0f);
+
+        // 突发噪音冲击判定：高于底噪 10dB 且至少达到 48dB (拍手、敲桌、关门声)
+        float thresh = max(noise_baseline + 10.0f, 48.0f);
+        if (cur_db > thresh && now - last_noise_ev_ms > 2000) {
             ev_noise++;
             last_noise_ev_ms = now;
-            Serial.printf("[Wake] Noise event %.1f dB\n", cur_db);
+            if (cur_db > ev_noise_max_db) ev_noise_max_db = cur_db;
+            Serial.printf("[Wake] Noise event #%d: %.1f dB (thresh=%.1f baseline=%.1f)\n",
+                          ev_noise, cur_db, thresh, noise_baseline);
         }
         if (cur_db > thresh && cur_db > ev_noise_max_db) ev_noise_max_db = cur_db;
-        if (cur_db < noise_baseline + 5.0f) noise_baseline = noise_baseline * 0.995f + cur_db * 0.005f;
     }
 
     // ---- 2. Light leak (BH1750 > 5 lx) / morning (>= 50 lx for 8 s) ----
@@ -1002,6 +1049,104 @@ static void fb_draw_ascii(uint16_t *fb, int x0, int y0, const char *str,
     }
 }
 
+// 绘制 Wi-Fi 信号图标 (16 x 14, 放置在顶栏 x0, y0)
+static void fb_draw_wifi_icon(uint16_t *fb, int x0, int y0) {
+    bool connected = (WiFi.status() == WL_CONNECTED);
+    int bars = 0;
+    uint8_t bar_r = 52, bar_g = 211, bar_b = 153; // 默认翡翠绿
+
+    if (connected) {
+        int rssi = (int)chat_wifi_rssi;
+        if (rssi >= -55)      bars = 4;
+        else if (rssi >= -68) bars = 3;
+        else if (rssi >= -80) bars = 2;
+        else                  bars = 1;
+    } else if (chat_state == CS_WIFI_CONNECTING) {
+        // 跑马灯动态扫描: 1 -> 2 -> 3 -> 4 逐级亮起
+        bars = ((millis() / 220) % 4) + 1;
+        bar_r = 251; bar_g = 191; bar_b = 36; // 琥珀黄
+    } else if (chat_state == CS_ERROR) {
+        bool blink = ((millis() / 300) % 2 == 0);
+        bars = blink ? 4 : 0;
+        bar_r = 248; bar_g = 113; bar_b = 113; // 红色闪烁
+    } else {
+        bars = 0; // CS_OFF 未配网
+    }
+
+    const uint8_t dim_r = 35, dim_g = 45, dim_b = 65;
+
+    // 4 根阶梯信号柱: x 宽度各 3px, 间距 1px
+    for (int i = 0; i < 4; i++) {
+        int bx = x0 + i * 4;
+        int bh = 4 + i * 3; // 高度分别为 4, 7, 10, 13 px
+        int by = y0 + 14 - bh;
+        bool lit = (i < bars);
+        uint8_t r = lit ? bar_r : dim_r;
+        uint8_t g = lit ? bar_g : dim_g;
+        uint8_t b = lit ? bar_b : dim_b;
+        fb_fill_rect(fb, bx, by, 3, bh, r, g, b);
+    }
+}
+
+// 绘制 Wi-Fi 进度与信号强度浮动卡片 (x=12, y=36, w=256, h=32)
+static void fb_draw_wifi_banner(uint16_t *fb) {
+    uint32_t now = millis();
+    bool is_connecting = (chat_state == CS_WIFI_CONNECTING);
+    bool is_err = (chat_state == CS_ERROR);
+    bool is_recent_ok = (WiFi.status() == WL_CONNECTED && (now < chat_wifi_connected_ms + 4000));
+    bool is_user_tap = (now < wifi_banner_until);
+
+    if (!is_connecting && !is_err && !is_recent_ok && !is_user_tap) {
+        return; // 平时不遮挡页面内容
+    }
+
+    int bx = 12, by = 36, bw = 256, bh = 32;
+    uint8_t bdr_r, bdr_g, bdr_b;
+    const uint8_t card_r = 14, card_g = 22, card_b = 42;
+
+    if (is_err) {
+        bdr_r = 248; bdr_g = 113; bdr_b = 113; // 红色
+    } else if (is_connecting) {
+        bdr_r = 251; bdr_g = 191; bdr_b = 36;  // 黄色
+    } else {
+        bdr_r = 52;  bdr_g = 211; bdr_b = 153; // 绿色
+    }
+
+    fb_draw_round_box(fb, bx, by, bw, bh, card_r, card_g, card_b, bdr_r, bdr_g, bdr_b, 1);
+
+    // 卡片左侧: Wi-Fi 图标
+    fb_draw_wifi_icon(fb, bx + 10, by + 9);
+
+    // 卡片中间: 进度条
+    int track_x = bx + 36, track_y = by + 13, track_w = 110, track_h = 6;
+    fb_fill_rect(fb, track_x, track_y, track_w, track_h, 30, 42, 65);
+
+    int pct = 0;
+    if (WiFi.status() == WL_CONNECTED) pct = 100;
+    else if (is_connecting) pct = chat_wifi_progress;
+    else pct = 0;
+    if (pct > 100) pct = 100;
+    if (pct < 0) pct = 0;
+
+    int fill_w = (track_w * pct) / 100;
+    if (fill_w > 0) {
+        fb_fill_rect(fb, track_x, track_y, fill_w, track_h, bdr_r, bdr_g, bdr_b);
+    }
+
+    // 卡片右侧: 数值文字 (百分比或信号强度 dBm)
+    char info[16];
+    if (WiFi.status() == WL_CONNECTED) {
+        snprintf(info, sizeof(info), "%d dBm", (int)chat_wifi_rssi);
+        fb_draw_ascii(fb, track_x + track_w + 10, by + 4, info, 52, 211, 153, card_r, card_g, card_b);
+    } else if (is_connecting) {
+        snprintf(info, sizeof(info), "%d %%", pct);
+        fb_draw_ascii(fb, track_x + track_w + 14, by + 4, info, 251, 191, 36, card_r, card_g, card_b);
+    } else {
+        snprintf(info, sizeof(info), "- -");
+        fb_draw_ascii(fb, track_x + track_w + 14, by + 4, info, 248, 113, 113, card_r, card_g, card_b);
+    }
+}
+
 // =========================================================
 // Render Complete Page into `fb`
 // =========================================================
@@ -1012,6 +1157,9 @@ static void render_page_to_fb(uint16_t *fb, int page_idx) {
     // 1. Top Header Bar ("刘航成 & 夏工")
     fb_blend_bitmap(fb, 0, 3, 280, 28, header_bmp, 255, 255, 255, bg_r, bg_g, bg_b);
     fb_fill_rect(fb, 12, 33, LCD_H_RES - 24, 1, 38, 130, 195);
+
+    // Wi-Fi signal icon in top-left corner
+    fb_draw_wifi_icon(fb, 10, 10);
 
     // BLE connection dot in top-right corner
     uint8_t dot_r = ble_connected ? 52  : 100;
@@ -1190,6 +1338,9 @@ static void render_page_to_fb(uint16_t *fb, int page_idx) {
 
     fb_draw_round_box(fb, 226, 206, 44, 30, 24, 38, 68, 56, 189, 248, 2);
     fb_draw_ascii(fb, 242, 209, ".", 56, 189, 248, 24, 38, 68);
+
+    // 4. Wi-Fi Status & Progress Toast Banner
+    fb_draw_wifi_banner(fb);
 }
 
 static void flush_fb_to_lcd(const uint16_t *fb) {
@@ -1291,8 +1442,16 @@ static void notify_ble_state() {
                  (unsigned long)temp_bad_s, (unsigned long)dur, wake_active ? 1 : 0,
                  white_noise_active ? 1 : 0);
     } else {
+        uint8_t led_mask = 0;
+        int active_leds = 0;
+        for (int i = 0; i < WS2812_NUM; i++) {
+            if (ws_led_colors[i][0] || ws_led_colors[i][1] || ws_led_colors[i][2]) {
+                led_mask |= (1 << i);
+                active_leds++;
+            }
+        }
         snprintf(json, sizeof(json),
-                 "{\"page\":%d,\"db\":%.1f,\"pct\":%d,\"mv\":%d,\"key\":%d,\"vol\":%d,\"pir\":%d,\"lux\":%ld,\"temp\":%.1f,\"pres\":%.1f,\"spa\":%d,\"wn\":%d}",
+                 "{\"page\":%d,\"db\":%.1f,\"pct\":%d,\"mv\":%d,\"key\":%d,\"vol\":%d,\"pir\":%d,\"lux\":%ld,\"temp\":%.1f,\"pres\":%.1f,\"spa\":%d,\"wn\":%d,\"led\":%d,\"ledm\":%d,\"chat\":\"%s\",\"wifi\":%d}",
                  cur_page,
                  cur_db,
                  cur_peak_pct,
@@ -1304,7 +1463,11 @@ static void notify_ble_state() {
                  ext_temp,
                  ext_pres,
                  ext_spa_online ? 1 : 0,
-                 white_noise_active ? 1 : 0);
+                 white_noise_active ? 1 : 0,
+                 active_leds,
+                 (int)led_mask,
+                 chat_state_name(),
+                 WiFi.status() == WL_CONNECTED ? 1 : 0);
     }
     pSensorChar->setValue((uint8_t *)json, strlen(json));
     if (ble_connected) {
@@ -1338,11 +1501,70 @@ class MyCharCallbacks : public BLECharacteristicCallbacks {
             } else if (cmd == 'N' || cmd == 'n') {
                 if (arg == 1 || arg == 2) pending_night = arg;   // N:1 start night, N:2 end night
             } else if (cmd == 'W' || cmd == 'w') {
-                if (arg == 4 || arg == 5) pending_sim = arg;     // W:4 simulate getting up, W:5 light leak
+                if (arg >= 3 && arg <= 5) pending_sim = arg;     // W:3 noise, W:4 simulate getting up, W:5 light leak
             } else if (cmd == 'B' || cmd == 'b') {
                 white_noise_active = (arg != 0);                 // B:1 start white noise, B:0 stop
                 if (white_noise_active && voice_task) xTaskNotifyGive(voice_task);
                 notify_ble_state();
+            } else if (cmd == 'L' || cmd == 'l') {
+                // LED 独立控制与调试指令
+                // 格式 1: 单灯控制 L:<idx>,<r>,<g>,<b>  (idx: 0..7, r,g,b: 0..255; 全0为灭)
+                // 格式 2: 全开/全设 L:A,<r>,<g>,<b> 或 L:-1,<r>,<g>,<b>
+                // 格式 3: 批量设置 8 颗灯 L:B,r0,g0,b0,r1,g1,b1...
+                const char *p = val.c_str() + 2;
+                if (*p == 'A' || *p == 'a') {
+                    int r = 0, g = 0, b = 0;
+                    if (sscanf(p + 1, ",%d,%d,%d", &r, &g, &b) == 3) {
+                        for (int i = 0; i < WS2812_NUM; i++) {
+                            ws_led_colors[i][0] = constrain(r, 0, 255);
+                            ws_led_colors[i][1] = constrain(g, 0, 255);
+                            ws_led_colors[i][2] = constrain(b, 0, 255);
+                        }
+                        ws2812_commit();
+                        notify_ble_state();
+                    }
+                } else if (*p == 'B' || *p == 'b') {
+                    const char *cur = p + 1;
+                    for (int i = 0; i < WS2812_NUM && *cur; i++) {
+                        int r = 0, g = 0, b = 0;
+                        if (sscanf(cur, ",%d,%d,%d", &r, &g, &b) == 3) {
+                            ws_led_colors[i][0] = constrain(r, 0, 255);
+                            ws_led_colors[i][1] = constrain(g, 0, 255);
+                            ws_led_colors[i][2] = constrain(b, 0, 255);
+                            for (int k = 0; k < 3; k++) {
+                                cur = strchr(cur + 1, ',');
+                                if (!cur) break;
+                            }
+                            if (!cur) break;
+                        } else {
+                            break;
+                        }
+                    }
+                    ws2812_commit();
+                    notify_ble_state();
+                } else {
+                    int idx = -1, r = 0, g = 0, b = 0;
+                    if (sscanf(p, "%d,%d,%d,%d", &idx, &r, &g, &b) == 4) {
+                        if (idx >= 0 && idx < WS2812_NUM) {
+                            ws_led_colors[idx][0] = constrain(r, 0, 255);
+                            ws_led_colors[idx][1] = constrain(g, 0, 255);
+                            ws_led_colors[idx][2] = constrain(b, 0, 255);
+                            ws2812_commit();
+                            notify_ble_state();
+                        } else if (idx == -1) {
+                            for (int i = 0; i < WS2812_NUM; i++) {
+                                ws_led_colors[i][0] = constrain(r, 0, 255);
+                                ws_led_colors[i][1] = constrain(g, 0, 255);
+                                ws_led_colors[i][2] = constrain(b, 0, 255);
+                            }
+                            ws2812_commit();
+                            notify_ble_state();
+                        }
+                    }
+                }
+            } else if (cmd == 'C' || cmd == 'c') {
+                // 语音对话配网: "C:<ssid>|<密码>|<服务器地址>" (明文局域网，安全边界: 手机和板子同在同一 Wi-Fi 下)
+                if (val.length() > 2) chat_apply_cfg_line(val.substring(2));
             } else if (cmd == 'K' || cmd == 'k') {
                 // 远程模拟物理按键按下 (K1~K6 行为与开发板硬件 100% 统一)
                 if (arg == 1) pending_page = (cur_page + NUM_PAGES - 1) % NUM_PAGES;
@@ -1446,6 +1668,7 @@ void setup() {
 
     voice_start_task();
     init_ble();
+    chat_init();                      // 语音对话: 读 NVS 配置，有配置就联网，没有就等手机蓝牙配网
     render_page_to_fb(fb_curr, cur_page);
     flush_fb_to_lcd(fb_curr);
     play_sound_effect(1); // Play welcome chord on boot
@@ -1504,6 +1727,8 @@ void loop() {
             // Short tap at (touch_x0, touch_y0)
             if (night_mode) {
                 pending_night = 2;                      // tap the dark screen = good morning
+            } else if (touch_y0 < 35 && touch_x0 < 60) {
+                wifi_banner_until = now + 4000;         // 点击顶栏 Wi-Fi 图标显示详情卡片 4 秒
             } else if (touch_y0 >= 200) {
                 if (touch_x0 < 75) {
                     int target = (cur_page + NUM_PAGES - 1) % NUM_PAGES;
@@ -1560,7 +1785,12 @@ void loop() {
         int sim = pending_sim;
         pending_sim = 0;
         if (night_mode) {
-            if (sim == 4) {
+            if (sim == 3) {
+                ev_noise++;
+                last_noise_ev_ms = millis();
+                if (ev_noise_max_db < 68.0f) ev_noise_max_db = 68.0f;
+                Serial.printf("[Wake] Simulated noise event #%d (68.0 dB)\n", ev_noise);
+            } else if (sim == 4) {
                 sim_wake_until = millis() + 8000;      // pretend someone got up for 8 s
             } else if (sim == 5) {
                 ev_leak++;                             // pretend a light leak happened

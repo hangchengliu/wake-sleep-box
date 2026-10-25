@@ -7,27 +7,58 @@
 > **Project Wake: Dedicated Bedroom Micro-Environment Guardian**  
 > Developers: **Hangcheng Liu & Xia Gong (刘航成 & 夏工)**  
 > Hardware Platform: **ESP32-S3-Korvo-2 V3 (KSDIY Edition)**  
-> Target Scenarios: Hackathon Innovation / Ambient Sleep Hygiene / Zero-Screen IoT Node / Web Bluetooth Dashboard
+> Target Scenarios: Hackathon Innovation / Ambient Sleep Hygiene / Zero-Screen IoT Node / Web Bluetooth Dashboard / Edge Voice VAD
 
 [![ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red.svg)](https://www.espressif.com/)
 [![Web Bluetooth](https://img.shields.io/badge/Web-Bluetooth%20API-blue.svg)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API)
 [![Framework: Arduino](https://img.shields.io/badge/Framework-Arduino-teal.svg)](https://github.com/arduino/arduino-cli)
+[![3D Printing: STL & OpenSCAD](https://img.shields.io/badge/3D%20Printing-Ready-orange.svg)](3d_models/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+---
+
+## 🏆 Hackathon Delivery Overview
+
+Project Wake has achieved **full-stack, closed-loop delivery** during the hackathon: from parametric 3D enclosure modeling, ESP32-S3 dual-core firmware engineering, edge-native lightweight adaptive VAD (Voice Activity Detection), to a local LLM voice relay hub and a cross-platform Web Bluetooth dashboard. The entire pipeline has been fully implemented and verified on real hardware.
+
+```
+                              Wake System Architecture & Topology
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                               Physical Hardware                             │
+  │  [ESP32-S3 Korvo 2 V3] ── Dual Mic ES7210 ── ES8311 DAC + 3W Cavity Speaker │
+  │  ├── 1.69" ST7789 IPS Touch LCD (TCA9554A Hardware Backlight Cutoff = 0 Lux) │
+  │  ├── WS2812 8-RGB Ring (High-precision RMT Driver / Amber Nightlight / FX)  │
+  │  ├── I2C Sensor Bus: BH1750 (Ambient Light 0.1-65535 lx) + SPA06 (P / T)    │
+  │  └── GPIO Peripherals: AM412 PIR Motion Sensor + 6-Key ADC Divider Matrix   │
+  └────────────────────────┬─────────────────────────────┬──────────────────────┘
+                           │ BLE 5.0 GATT (5Hz)          │ Wi-Fi 802.11 b/g/n
+                           ▼                             ▼
+  ┌──────────────────────────────────┐        ┌─────────────────────────────────┐
+  │     Web Bluetooth Dashboard      │        │       Local Voice Relay Hub     │
+  │      (ble_dashboard.html)        │        │      (voice_relay/server.py)    │
+  │  • Driverless Web BLE Link       │        │  • Adaptive Noise Floor VAD     │
+  │  • Real-time Waveforms & Sim     │        │  • Whisper ASR + Char Mapping   │
+  │  • WS2812 Ring Color Visualizer  │        │  • LLM Intent (Night/Dream/Q&A) │
+  │  • Over-the-Air Wi-Fi Provision  │        │  • TTS Audio + 60s Auto Breaker │
+  │  • Apple Watch Dual-Track Align  │        │  • Offline Voice Fallback Mode  │
+  └──────────────────────────────────┘        └─────────────────────────────────┘
+```
 
 ---
 
 ## Table of Contents
 1. [Product Vision & Core Philosophy](#1-product-vision--core-philosophy)
 2. [Hardware Architecture & Key Specifications](#2-hardware-architecture--key-specifications)
-3. [Pinout & Peripheral Mapping](#3-pinout--peripheral-mapping)
-4. [Flash Layout & Non-Destructive Dual-OTA Design](#4-flash-layout--non-destructive-dual-ota-design)
-5. [Toolchain, Compilation & Flashing Guide](#5-toolchain-compilation--flashing-guide)
-6. [Onboard Offline Voice Engine](#6-onboard-offline-voice-engine)
-7. [BLE GATT Communication Protocol](#7-ble-gatt-communication-protocol)
-8. [Driver Engineering & Algorithmic Details](#8-driver-engineering--algorithmic-details)
+3. [Industrial Design & 3D Printable Enclosures](#3-industrial-design--3d-printable-enclosures)
+4. [Pinout & Peripheral Mapping](#4-pinout--peripheral-mapping)
+5. [Flash Layout & Non-Destructive Dual-OTA Design](#5-flash-layout--non-destructive-dual-ota-design)
+6. [Dual-Mode Voice Engine: Edge VAD & Cloud Relay](#6-dual-mode-voice-engine-edge-vad--cloud-relay)
+7. [WS2812 8-LED Ring Control & RMT Engine](#7-ws2812-8-led-ring-control--rmt-engine)
+8. [BLE GATT Communication Protocol](#8-ble-gatt-communication-protocol)
 9. [External Sensor Wiring Guide](#9-external-sensor-wiring-guide)
 10. [Web Bluetooth Dashboard Architecture](#10-web-bluetooth-dashboard-architecture)
-11. [3-Minute Hackathon Pitch Script](#11-3-minute-hackathon-pitch-script)
+11. [Toolchain, Compilation & Flashing Guide](#11-toolchain-compilation--flashing-guide)
+12. [3-Minute Hackathon Pitch Script & Deck Automation](#12-3-minute-hackathon-pitch-script--deck-automation)
 
 ---
 
@@ -42,6 +73,10 @@
   - **One-Sentence Morning Debrief**: Upon waking, Wake gives you a concise spoken diagnosis of last night's biggest culprit (*"At 03:15, a 64dB traffic spike caused your early arousal—keep windows closed tonight"*).
   - **Zero Camera, Absolute Privacy**: Standard visible cameras are completely blind in dark bedrooms (<1 Lux), generate thermal distortion affecting sensors, and trigger acute privacy anxiety. Wake substitutes vision entirely with multi-sensor state fusion.
 
+<p align="center">
+  <img src="3d_models/wake_meme_grand_5_philosophies.jpg" alt="Wake 5 Core Philosophies" width="85%">
+</p>
+
 ---
 
 ## 2. Hardware Architecture & Key Specifications
@@ -54,272 +89,208 @@
 | **Touch** | Hynitron CST816S | Capacitive multi-point touch controller, I2C address `0x15` |
 | **Audio DAC** | Everest ES8311 + NS4150B PA | 16kHz/44.1kHz 16-bit I2S, driving 3W cavity speaker |
 | **Audio ADC** | Everest ES7210 4-ch Mic ADC | Dual MSM381A3729H9CP analog mics, I2C address `0x40` |
+| **Ambient Light**| WS2812B 8-LED Ring | GPIO 20 driven by hardware RMT, nanosecond precision |
 | **IO Expander** | TCA9554A 8-bit I2C GPIO | Address `0x38`; Bit 1 cuts LCD backlight; Bit 0 controls peripheral power |
 | **Key Matrix** | 6-Key Resistor Divider (GPIO 5) | Single 12-bit ADC pin distinguishes keys K1 through K6 |
 | **Connectivity** | 2.4GHz Wi-Fi + Bluetooth 5 (LE) | BLE GATT peripheral running at 4~5Hz telemetry stream |
 
 ---
 
-## 3. Pinout & Peripheral Mapping
+## 3. Industrial Design & 3D Printable Enclosures
 
-```
-                 ESP32-S3-Korvo-2 V3 Pinout Diagram
-┌─────────────────────────────────────────────────────────────────┐
-│ [ST7789 LCD]       MOSI: 0  | SCLK: 1  | DC: 2   | CS: 46       │
-│ [I2S Audio Stream] MCLK: 16 | BCLK: 9  | WS: 45  | DOUT: 8 (DAC)│
-│                    DIN: 10 (Mic ADC)   | PA Enable: 48          │
-│ [Shared I2C Bus]   SDA: 17  | SCL: 18  (@ 400kHz)                │
-│                    • 0x15: CST816S Capacitive Touch             │
-│                    • 0x18: ES8311 Playback DAC                  │
-│                    • 0x38: TCA9554A IO Expander (P1=Backlight)  │
-│                    • 0x40: ES7210 Microphone ADC                │
-│                    • 0x23: (External) BH1750 Ambient Light     │
-│                    • 0x76: (External) SPA06/SPL06 Temp/Baro    │
-│ [Onboard Keys]     GPIO 5 (ADC1 Channel 4, 12-bit Divider)      │
-│ [External GPIOs]   GPIO 19: AM412 PIR Human Infrared Motion     │
-│                    GPIO 20: WS2812 8-LED RGB Ring (RMT Driven)  │
-└─────────────────────────────────────────────────────────────────┘
-```
+In the [`3d_models/`](3d_models/) directory, Project Wake provides complete parametric OpenSCAD modeling files, watertight manifold STL print slice files, and high-fidelity concept renders.
 
----
-
-## 4. Flash Layout & Non-Destructive Dual-OTA Design
-
-To safeguard the factory-installed Xiaozhi AI speech model from corruption, Wake uses an **independent dual-OTA partition strategy**:
-
-```
-Flash Physical Layout (16MB Total):
-0x000000 ─────────── bootloader.bin (32KB)
-0x008000 ─────────── partition-table.bin (4KB)
-0x00e000 ─────────── otadata.bin (8KB) [Backed up in backup_otadata.bin]
-0x010000 ─────────── 3MB Offline Wake-Word Speech Model (model) [Untouched]
-0x330000 ─────────── ota_0 (4MB): Factory Xiaozhi AI Official Firmware [Preserved]
-0x730000 ─────────── ota_1 (4MB): Wake Sleep Hygiene Monitor Firmware [Active]
-```
-
-- **Safety Guarantee**: Flashing commands write **only to `0x730000` (`ota_1`)**, never touching `0x330000` or `0x010000`.
-- **Zero-Risk Rollback**: Reverting to factory Xiaozhi AI only requires restoring `backup_otadata.bin` to `0x00e000`:
-  ```bash
-  python3 tools/boot_switch.py xiaozhi --apply
-  ```
-
----
-
-## 5. Toolchain, Compilation & Flashing Guide
-
-### Environment Setup (macOS Apple Silicon Notes)
-Standard x86_64 `ctags` provided with Arduino CLI crashes on Apple Silicon (M1/M2/M3/M4). A universal ARM64 shim has been pre-configured:
-- `ctags` path: `/Users/hancg/Library/Arduino15/packages/builtin/tools/ctags/5.8-arduino11/ctags`
-- Arduino CLI: `"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"`
-- esptool: `/Users/hancg/Library/Arduino15/packages/esp32/tools/esptool_py/5.3.1/esptool`
-- Port: `/dev/cu.usbmodem5B790674601` (WCH CH343 High-Speed Serial)
-
-### Compilation
-> [!IMPORTANT]
-> The flag `--build-property build.maximum_size=4194304` must be passed to expand the sketch partition limit to 4MB (default template restricts to 1.3MB, triggering overflow on BLE builds).
-
-```bash
-"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" compile \
-  --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,FlashMode=qio" \
-  --build-property build.maximum_size=4194304 \
-  --build-path /Users/hancg/Desktop/hackathon/display_name/build \
-  /Users/hancg/Desktop/hackathon/display_name
-```
-
-### Direct Flashing (OTA1 @ 921600 Baud)
-```bash
-/Users/hancg/Library/Arduino15/packages/esp32/tools/esptool_py/5.3.1/esptool \
-  --chip esp32s3 \
-  --port /dev/cu.usbmodem5B790674601 \
-  --baud 921600 \
-  write-flash 0x730000 /Users/hancg/Desktop/hackathon/display_name/build/display_name.ino.bin
-```
-Or execute the automated safe script:
-```bash
-./flash.sh
-```
-
----
-
-## 6. Onboard Offline Voice Engine
-
-- **Fully Self-Contained**: The morning speech report is stored entirely within the firmware binary—zero cloud or internet dependency.
-- **Dynamic Vocabulary Stitching**: Concatenates ~35 pre-recorded audio snippets (16kHz PCM) to articulate real night metrics: overall score, noise spikes, maximum decibels, light leaks, and personalized actionable advice.
-- **Regenerating Speech Corpus**:
-  ```bash
-  python3 tools/gen_voice.py --check          # Verify macOS speech synthesis
-  python3 tools/gen_voice.py                  # Generates display_name/voice_data.h
-  ```
-- **Trigger Methods**: Tapping "View Morning Report" on LCD, pressing physical key K3/K6, or clicking "Good Morning Report" (BLE command `N:2`) on the web dashboard.
-
----
-
-## 7. BLE GATT Communication Protocol
-
-- **Broadcast Name**: `Korvo-刘航成&夏工`
-- **Service UUID**: `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
-- **Characteristic UUID**: `beb5483e-36e1-4688-b7f5-ea07361b26a8` (`READ | WRITE | NOTIFY`)
-
-### Downlink Commands (Write Without Response)
-| Command | Description | Example |
+| Enclosure Variant | Target Scenario | Key Features & Source Assets |
 | :--- | :--- | :--- |
-| `P:<0~4>` | Switch LCD carousel page | `P:0` (Wake Home), `P:1` (Spectrum) |
-| `N:1` | **Start Night Watch** (Backlight cut off, lullaby chime, resets night counters) | `N:1` |
-| `N:2` | **Trigger Morning Wakeup** (Backlight on, sunrise chime, voice debrief) | `N:2` |
-| `W:4` | Simulate nocturnal bathroom visit (PIR trip + dim amber light for 8s) | `W:4` |
-| `W:5` | Simulate ambient light leak (Light leak counter +1) | `W:5` |
-| `S:<1~4>` | Play onboard synthesized chime (1=Welcome, 2=Doorbell, 3=Alert, 4=Scale) | `S:1` |
-| `S:7` | Play sunrise chord + onboard spoken Chinese morning report | `S:7` |
-| `V:<0~100>`| Adjust speaker output volume | `V:80` |
+| **Form B Classic Windowed**<br>*(Recommended Print)* | Bedside nightstand, formal demo day presentation | Dimensions: 165 × 55 mm. Features custom bezels for 1.69" LCD, acoustic cutouts for dual mics and speaker, side Type-C cable path.<br>• Print STL: [`wake_box_form_b_165x55.stl`](3d_models/wake_box_form_b_165x55.stl)<br>• OpenSCAD: [`wake_box_form_b_165x55.scad`](3d_models/wake_box_form_b_165x55.scad) |
+| **Form B Screenless Minimalist** | Extreme zero-light purists | Solid top surface with no screen reflection. Uses top WS2812 ring amber illumination and offline voice debrief.<br>• Print STL: [`wake_box_final_screenless.stl`](3d_models/wake_box_final_screenless.stl) |
+| **Form A Angled Caddy** | Desktop workspace or nightstand view | Ergonomic 30° viewing tilt angle for effortless touchscreen operation.<br>• OpenSCAD: [`wake_box_angled.scad`](3d_models/wake_box_angled.scad) |
+| **MVP Open Box** | Rapid debugging and testing | Fast print (~1.5 hours) with open-access sensor pin headers.<br>• Print STL: [`wake_box_mvp_open.stl`](3d_models/wake_box_mvp_open.stl) |
 
-### Uplink Telemetry (Alternating Notify Stream @ 4~5Hz)
-- **Packet Type A: Real-time Sensor Stream**
-  ```json
-  {
-    "page": 0,          // Current LCD page index (0..4)
-    "db": 42.5,         // Real-time microphone sound level (30~95 dB)
-    "pct": 12,          // Instantaneous peak percentage (0~100%)
-    "mv": 3280,         // Key ADC voltage in millivolts
-    "key": 0,           // Currently pressed key (0=None, 1~6=K1~K6)
-    "vol": 80,          // Speaker volume
-    "pir": 0,           // PIR status (0=Idle, 1=Motion)
-    "lux": -1,          // BH1750 lux (-1=Disconnected, >=0=Lux value)
-    "temp": 0.0,        // SPA06 temperature (°C)
-    "pres": 0.0,        // SPA06 barometric pressure (hPa)
-    "spa": 0            // SPA06 presence flag (0=Offline, 1=Online)
-  }
-  ```
-- **Packet Type B: Wake Sleep Hygiene Diagnostic Packet (`w: 1`)**
-  ```json
-  {
-    "w": 1,
-    "night": 1,         // Night watch active (1=Yes, 0=No)
-    "rep": 0,           // Morning report ready (1=Generated)
-    "score": 78,        // Composite Sleep Hygiene Score (0~100)
-    "ne": 2,            // Noise impact events (>55dB)
-    "nmax": 68.2,       // Peak noise recorded (dB)
-    "le": 1,            // Light leak events (>5lx)
-    "we": 1,            // Nocturnal wake-up / out-of-bed count
-    "wsec": 180,        // Total nocturnal wake duration in seconds
-    "adv": 2,           // Actionable advice category ID (1..5)
-    "tmin": 18.5,       // Night minimum temperature (°C)
-    "tmax": 24.1,       // Night maximum temperature (°C)
-    "tbad": 0,          // Seconds temperature drifted out of comfort zone (16~25°C)
-    "dur": 28800,       // Night watch duration in seconds
-    "wact": 0           // Currently out of bed
-  }
+<p align="center">
+  <img src="3d_models/wake_box_form_b_165x55_render.jpg" alt="Form B Windowed Render" width="48%">
+  <img src="3d_models/wake_box_screenless_165x55_render.jpg" alt="Form B Screenless Render" width="48%">
+</p>
+
+> [!TIP]
+> Recommended slicing parameters: **PLA+ or PETG (Matte Black / Charcoal Grey)**, `0.2mm` layer height, `15%~20%` infill, `3 wall perimeters`. See [`3d_models/README.md`](3d_models/README.md) for complete details.
+
+---
+
+## 4. Pinout & Peripheral Mapping
+
+```
+              ESP32-S3-Korvo-2 V3 Core Pinout
+┌───────────────────────────────────────────────────────────────┐
+│ [ST7789 LCD]       MOSI: 0  | SCLK: 1  | DC: 2   | CS: 46     │
+│ [I2S Audio Stream] MCLK: 16 | BCLK: 9  | WS: 45  | DOUT: 8 (DAC)│
+│                    DIN: 10 (ADC Mics)  | PA Enable: 48        │
+│ [Shared I2C Bus]   SDA: 17  | SCL: 18  (@ 400kHz)              │
+│                    • 0x15: CST816S Capacitive Touch           │
+│                    • 0x18: ES8311 Playback DAC                │
+│                    • 0x38: TCA9554A IO Expander (P1=Backlight)│
+│                    • 0x40: ES7210 Mic ADC (+30dB Mic Gain)    │
+│                    • 0x23: BH1750 Ambient Light Sensor        │
+│                    • 0x76: SPA06 Barometer & Thermometer      │
+│ [WS2812 LED Ring]  GPIO 20 (RMT Hardware Channel)             │
+│ [PIR Motion Sensor]GPIO 19 (Active HIGH)                      │
+│ [6-Key ADC Matrix] GPIO 5 (ADC1 Channel 4)                    │
+└───────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Flash Layout & Non-Destructive Dual-OTA Design
+
+To safeguard the factory-flashed Xiaozhi AI firmware without damaging its proprietary wake-word models, Wake uses a **non-destructive, OTA1-isolated flashing strategy**:
+
+```
+Flash Physical Address Map (16MB Total):
+0x000000 ─────────── Bootloader bootloader.bin (32KB)
+0x008000 ─────────── Partition Table partition-table.bin (4KB)
+0x00e000 ─────────── OTA Data otadata.bin (8KB) [Backed up as backup_otadata.bin]
+0x010000 ─────────── Factory 3MB Offline Wake Model (model) [Untouched]
+0x330000 ─────────── ota_0 (4MB): Original Factory Xiaozhi AI Firmware [Preserved]
+0x730000 ─────────── ota_1 (4MB): Project Wake Firmware [Active App]
+```
+
+- **Current Active Slot**: Booted to `ota_1` via `otadata_ota1.bin`.
+- **Target Flash Offset**: **Always flash to `0x730000`**. Never erase `0x330000` or `0x010000`.
+- **Restore Factory Firmware**:
+  ```bash
+  esptool --chip esp32s3 --port /dev/cu.usbmodem5B790674601 write-flash 0x00e000 backup_otadata.bin
   ```
 
 ---
 
-## 8. Driver Engineering & Algorithmic Details
+## 6. Dual-Mode Voice Engine: Edge VAD & Cloud Relay
 
-### 1. True Zero-Lux Hardware Shut-off
-- Standard UI black rendering still allows LCD backlight bleed through liquid crystals (~0.3 Lux), suppressing melatonin synthesis.
-- Wake controls the `TCA9554A` expander via I2C (`i2c_write_reg(0x38, 0x01, out & ~0x02)`), physically cutting the backlight drive transistor. Real-world emission is **0.00 Lux absolute pitch-black**.
+Wake features a dual-mode voice engine: an **onboard offline speech synthesizer** that operates without network access, and a **local cloud-assisted Voice Relay** for interactive LLM conversation and control.
 
-### 2. Privacy-Safe Acoustic Envelope Engine
-- Continuous 16kHz 16-bit PCM streaming into `ES7210`.
-- 256-sample window DC offset removal followed by Root Mean Square (RMS) calculation:
-  $$\text{dB} = 28.0 + 16.5 \times \log_{10}(\text{RMS})$$
-- Adaptive floor tracker `noise_baseline`. An event is recorded only when $\text{dB} > \max(\text{baseline} + 12, 50\text{dB})$ with a $>3\text{s}$ refractory filter.
-- **Acoustic Self-Mute**: When the speaker plays a chime, sound input is blanked for 900ms to eliminate acoustic feedback loops.
+### 1. Edge-Native Lightweight VAD (`display_name/speech_detect.h`)
+A pure C++ Voice Activity Detection state machine built for embedded low-compute environments:
+- **Adaptive Ambient Noise Tracking**: Evaluates baseline room noise upon boot (1s warm-up) and tracks slowly rising environmental background noise (capped at 4000 RMS).
+- **Transient Pulse Filtering**: Requires 3 consecutive high-energy frames (48ms) to trigger speech detection, eliminating door slams or table bumps.
+- **Pre-Roll Audio Ring Buffer**: Maintains a 14-frame (~224ms) pre-roll buffer so the initial syllable of "Xiao Ye" is never clipped.
+- **Hangover Silence & Overflow Guard**: Automatically detects sentence completion after 44 quiet frames (~700ms); caps recording at 24s to prevent buffer overflow.
+- **Unit Tested**: Fully tested against 11 acoustic test vectors in `tools/test_speech_detect.cpp`.
 
-### 3. ADC 6-Key Voltage Divider (GPIO 5)
-Calibrated thresholds for KSDIY resistor network:
-- `K1 (Previous Page)`: `150mV ~ 600mV` (Nominal 380mV)
-- `K2 (Next Page)`: `600mV ~ 1000mV` (Nominal 820mV)
-- `K3 (Toggle Sleep Mode)`: `1000mV ~ 1375mV` (Nominal 1180mV)
-- `K4 (Simulate Wake-up)`: `1375mV ~ 1775mV` (Nominal 1570mV)
-- `K5 (Simulate Light Leak)`: `1775mV ~ 2195mV` (Nominal 1980mV)
-- `K6 (Morning Report / Chime)`: `2195mV ~ 2680mV` (Nominal 2410mV)
-- `Idle`: `> 2800mV` (Pulled up to ~3.28V)
+### 2. Local Voice Relay Hub (`voice_relay/server.py`)
+Built with Python standard libraries (zero third-party dependencies):
+- **Wake Word Gate**: Filters incoming audio for "Xiao Ye" with sliding follow-up conversation windows.
+- **Anti-Interception & Exponential Retry**: Emulates browser User-Agent headers to avoid Cloudflare 1010 blocks; catches remote disconnections with 1.5s/3.0s exponential backoff retries.
+- **Circuit Breaker for TTS**: Automatically triggers a 60-second circuit breaker after 2 consecutive TTS failures, falling back to instant command execution and onboard voice confirmation.
+- **Traditional-to-Simplified Mapping & Hallucination Filter**: Maps homophones and filters out Whisper silent-audio subtitle hallucinations.
+- **Intent Recognition & Dream Journal**: Direct command execution (`Start Night` $\rightarrow$ `N:1`, `Stop Night` $\rightarrow$ `N:2`), plus automatic recording of dream descriptions to local `notes.jsonl`.
 
-### 4. CST816S Inverted Touch Coordinate Transformation
-Because the display is rotated 180° for bedside ergonomics, raw touch coordinates undergo real-time matrix transformation:
-$$x = (240 - \text{raw\_y}) + 20,\quad y = \text{raw\_x}$$
-Horizontal swipe gestures ($|\Delta x| \ge 34\text{px}$) trigger 4-stage smooth sliding transitions between carousel pages.
+### 3. Onboard Offline Speech Engine
+- Firmware embeds ~35 pre-recorded Mandarin vocal syllables (`display_name/voice_data.h`).
+- Synthesizes dynamic morning reports articulating score, noise count, max dB, light leaks, and nocturnal arousals without any internet connection.
+
+> [!IMPORTANT]
+> **Strict Privacy Guarantee**: During **Night Mode (Sleep Mode)**, the firmware completely halts all audio recording and Wi-Fi streaming tasks. The microphones operate solely in local dB envelope calculation mode.
+
+---
+
+## 7. WS2812 8-LED Ring Control & RMT Engine
+
+Wake features an 8-LED WS2812B RGB ring on GPIO 20, driven by the ESP32-S3's hardware RMT engine:
+1. **Nocturnal Amber Light**: When midnight movement is detected by the PIR sensor or keypress, 1~2 LEDs illuminate softly at 5 Lux amber light, turning off automatically after the person returns to bed.
+2. **Control Protocol**:
+   - `L:idx,r,g,b`: Set an individual LED's RGB color (`idx` = 0..7, or `-1` for all).
+   - `L:A,r,g,b`: Turn all LEDs on to a unified color.
+   - `L:B,r0,g0,b0,r1,g1,b1...`: Batch synchronize distinct colors to all 8 LEDs in one packet.
+3. **Web Dashboard Visualizer**: Interactive ring color picker and breathing rainbow animations in `ble_dashboard.html`.
+
+---
+
+## 8. BLE GATT Communication Protocol
+
+- **Broadcast Name**: `ESP32S3_WakeBox`
+- **Service UUID**: `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`
+- **Notify UUID**: `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` (Device $\rightarrow$ Client, 5Hz Telemetry)
+- **Write UUID**: `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` (Client $\rightarrow$ Device, Commands)
+
+### Telemetry Packet Format (Notify)
+```
+<Page>,<Current_dB>,<Max_dB>,<Lux>,<hPa>,<Temp_C>,<Night_Mode>,<Wakes>,<Noise_Events>,<Light_Leaks>,<Score>,<Volume>,<Mute>
+```
+*Example*: `1,42.5,68.2,0.0,1013.25,24.8,1,2,1,0,88,60,0`
+
+### Control Command Reference (Write)
+| Command | Description |
+| :--- | :--- |
+| `P:<0~4>` | Switch LCD screen page (0:Cover, 1:Sensors, 2:Night, 3:Morning, 4:Settings) |
+| `N:<0/1/2>`| Night Mode control (`N:1` enter sleep mode, `N:2` end sleep & report, `N:0` exit) |
+| `V:<0~100>`| Set onboard speaker volume |
+| `M:<0/1>`  | Mute / Unmute speaker |
+| `S:<1~6>`  | Play onboard chime sound effect |
+| `E:<3/4/5>`| Inject simulated night event (`E:3` 68dB noise, `E:4` night awakening, `E:5` light leak) |
+| `L:idx,r,g,b` | Control WS2812 ring LEDs |
+| `C:<ssid>\|<pwd>\|<srv>` | Over-the-air BLE Wi-Fi provisioning to ESP32 NVS |
+| `K:<1~6>`  | Simulate physical push buttons K1~K6 |
 
 ---
 
 ## 9. External Sensor Wiring Guide
 
-Plug-and-play wiring completes in 30 seconds:
+Align headers on the sensor breakout row:
 
 ```
-          ESP32-S3 Korvo 2 V3 External Header Layout
-┌──────────────────────────────────────────────────────────┐
-│  3.3V   GND   GPIO17(SDA)   GPIO18(SCL)                  │ ─── Shared I2C Port
-│  GPIO19(PIR)  GPIO20(LED)   5V / VBUS                    │ ─── Functional Port
-└──────────────────────────────────────────────────────────┘
+      ESP32-S3 Korvo 2 V3 Sensor Pinout
+┌──────────────────────────────────────────────────┐
+│  3.3V   GND   GPIO17(SDA)   GPIO18(SCL)          │ ─── Shared I2C Port
+│  GPIO19(PIR)  GPIO20(LED)   5V / VBUS            │ ─── Dedicated Ports
+└──────────────────────────────────────────────────┘
 ```
 
-1. **☀️ BH1750 Ambient Light Sensor**:
-   - `VCC` → `3.3V`, `GND` → `GND`, `SCL` → `GPIO 18`, `SDA` → `GPIO 17`, `ADDR` floating or GND (Address `0x23`).
-2. **🌡️ SPA06 Temperature & Barometer**:
-   - Paralleled directly on the same I2C bus: `3.3V`, `GND`, `SDA(17)`, `SCL(18)`. Address `0x76` (no conflict).
-3. **🚶 AM412 PIR Human Infrared Sensor**:
-   - `VCC` → `3.3V`, `GND` → `GND`, `OUT` → **`GPIO 19`**.
-4. **💡 WS2812 8-LED RGB Ring**:
-   - `VCC` → `5V` (or `3.3V`), `GND` → `GND`, `DI` → **`GPIO 20`**.
+1. **☀️ BH1750 Ambient Light**: `VCC` $\rightarrow$ `3.3V`, `GND` $\rightarrow$ `GND`, `SCL` $\rightarrow$ `GPIO 18`, `SDA` $\rightarrow$ `GPIO 17` (I2C `0x23`).
+2. **🌡️ SPA06 Barometer/Temp**: Paralleled on `3.3V`, `GND`, `SDA(17)`, `SCL(18)` (I2C `0x76`). Fully compatible.
+3. **🚶 AM412 PIR Motion**: `VCC` $\rightarrow$ `3.3V`, `GND` $\rightarrow$ `GND`, `OUT` $\rightarrow$ **`GPIO 19`**.
+4. **💡 WS2812 8-LED Ring**: `VCC` $\rightarrow$ `5V` (or `3.3V`), `GND` $\rightarrow$ `GND`, `DI` $\rightarrow$ **`GPIO 20`**.
 
 ---
 
 ## 10. Web Bluetooth Dashboard Architecture
 
-- **URL**: `http://localhost:8765/ble_dashboard.html`
-- **Serve Command**: `python3 -m http.server 8765 --directory /Users/hancg/Desktop/hackathon`
-- **Why Localhost**: Chrome enforces that `navigator.bluetooth` can only execute in secure contexts (`https://` or `http://localhost`).
-
-### Four Standout Browser Capabilities:
-1. **Web Speech API Natural Chinese Synthesis**:
-   Reads out a rich morning analysis: *"Good morning! Your bedroom sleep hygiene score last night was 78 points. We recorded 2 noise events (peak 68.2 dB) and 1 light leak..."*
-2. **Apple Watch × Wake Dual-Track Correlation Timeline**:
-   Aligns wearable sleep stages with bedroom environment events—visually demonstrating that an Apple Watch awakening at 03:18 was directly triggered by a 64dB noise spike at 03:15.
-3. **Web Audio Pure Algorithmic White Noise Generator**:
-   Uses Pink/Brownian noise generation combined with `BiquadFilterNode` filters to synthesize natural rain, ocean waves, and campfires on the fly without downloading audio assets.
-4. **Voice Dream Journal**:
-   Logs dream fragments right after awakening, analyzing dream emotional valence correlated with last night's environmental sleep score.
+Wake's dashboard ([`ble_dashboard.html`](ble_dashboard.html)) runs entirely in modern browsers via Web Bluetooth API.
+- **Launch Command**:
+  ```bash
+  python3 -m http.server 8765
+  # Open http://localhost:8765/ble_dashboard.html in Chrome
+  ```
+- **Dual-Track Cross Validation Card**: Aligns Apple Watch awakening timestamps (03:18) directly with Wake's bedroom noise spikes (03:15, 64dB) to prove causal environmental correlation.
+- **WS2812 Color Visualizer**: Live 8-LED bead picker, color wheel, and dynamic lighting presets.
+- **OTA Wi-Fi Provisioner**: Injects Wi-Fi credentials and local voice relay endpoint over BLE into NVS with one click.
+- **Algorithmic White Noise Generator**: Synthesizes rain, waves, and campfire in pure Web Audio.
 
 ---
 
-## 11. 3-Minute Hackathon Pitch Script
+## 11. Toolchain, Compilation & Flashing Guide
 
-```text
-[0:00 - 0:40] The Problem
-"Good morning judges, we are Hangcheng Liu and Xia Gong. Millions wear Apple Watches
-and Oura Rings to track their sleep. But wearables can only tell you: 'You woke up
-three times last night.' They can NEVER tell you WHY you woke up!
-True sleep hygiene is determined by your bedroom—sudden noise, light leaks, and
-temperature drops. Today, we introduce Wake: a device that measures the room,
-not the person."
-
-[0:40 - 1:20] True Zero-Lux & Privacy First
-"When going to bed, tap K3 or blow out the lights. Notice: the LCD backlight is
-physically powered down via TCA9554—delivering true 0.00 Lux pitch darkness.
-We deliberately excluded cameras: ordinary cameras are useless in dark bedrooms,
-emit heat that skews sensors, and violate bedroom privacy. We achieve full state
-detection using sound envelopes, PIR, and precision lux sensors."
-
-[1:20 - 2:10] Live Simulation of Three Sleep Disruptors
-"While sleeping:
-1. A heavy truck rumbles by outside—(tap table loudly to trigger 65dB event).
-2. Getting up for water—(wave hand over PIR; WS2812 softly lights a 10% amber nightlight).
-3. Early dawn curtain leak—(flashlight shines on BH1750; light leak counter increments)."
-
-[2:10 - 3:00] Morning Wakeup & Wearable Cross-Validation
-"Upon waking, tap the screen:
-(The speaker plays a sunrise chord, displaying a Sleep Hygiene Score of 76;
-the device speaks: 'Good morning! Last night scored 76 points, mainly due to
-midnight noise spikes. Keep windows tightly shut tonight.')
-Look at the web dashboard: we correlate Wake's environmental telemetry directly
-with Apple Watch sleep stages. It proves definitively that the user's 03:18
-awakening was caused by the 03:15 traffic spike.
-This is Wake: giving every restless sleeper the data to reclaim their room."
+### Quick Automation Script (`flash.sh`)
+```bash
+./flash.sh            # Complete compilation, flash to ota_1, and log capture
+./flash.sh --quick    # Skip compile, flash latest build immediately
+./flash.sh --log-only # Monitor serial output (configurable via LOG_SECONDS=30)
 ```
 
 ---
 
-## License
+## 12. 3-Minute Hackathon Pitch Script & Deck Automation
+
+### 1. Presentation Deck Automation (`generate_deck.py`)
+Run `python3 generate_deck.py` to produce [`batch.json`](batch.json) for Google Slides presentation generation with a unified cyber dark theme.
+
+### 2. Pitch Script
+- **[0:00 - 0:40] Problem**: Why wearables tell you *that* you woke up, but cannot tell you *why*.
+- **[0:40 - 1:20] Sleep Onboarding & 0 Lux**: Press K3, physical screen backlight cut-off to 0 Lux. Zero cameras.
+- **[1:20 - 2:00] Simulation**: Transient noise, bathroom visit with gentle amber nightlight, morning light leak.
+- **[2:00 - 2:40] Wake & Debrief**: "Xiao Ye, Stop Night". Spoken debrief explaining the 64dB noise at 03:15 aligned with Apple Watch data.
+- **[2:40 - 3:00] Conclusion**: Project Wake—full-stack delivered, the considerate guardian of your bedroom environment.
+
+---
+
+## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).

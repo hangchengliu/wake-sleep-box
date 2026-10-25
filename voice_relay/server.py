@@ -96,10 +96,26 @@ def wav_to_pcm16k(data: bytes) -> bytes:
 RETRY_CODES = (429, 500, 502, 503, 504)
 
 
+def _is_conn_drop(e: BaseException) -> bool:
+    """对端在没回应前就断开(如 'Remote end closed connection without response')。
+    这类是瞬时的、请求大概率根本没被处理，值得重试。读超时(socket.timeout)不算：
+    请求可能已被上游处理，重试会白白多等一个 timeout，也可能重复计费。"""
+    import http.client, socket
+    if isinstance(e, socket.timeout):
+        return False
+    if isinstance(e, (http.client.RemoteDisconnected, http.client.IncompleteRead, ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+        return True
+    if isinstance(e, urllib.error.URLError):
+        r = e.reason
+        return isinstance(r, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, http.client.RemoteDisconnected))
+    return False
+
+
 def _post(url, body, headers, timeout=30, tries=3):
     """所有上游调用共用。
     - 上游前面有 Cloudflare，会拦截 Python-urllib 默认 UA (error code 1010)，所以显式带 UA，可用 USER_AGENT 覆盖。
-    - 429/5xx(上游过载)按 1.5s、3s 退避重试，共 tries 次；其它错误(401/403/400)立刻抛出，不重试。
+    - 429/5xx(上游过载)和连接被对端掐断：按 1.5s、3s 退避重试，共 tries 次。
+    - 其它错误(401/403/400)和读超时：立刻抛出，不重试。
     """
     h = {"User-Agent": os.environ.get("USER_AGENT", "curl/7.88.1")}
     h.update(headers)
@@ -112,10 +128,14 @@ def _post(url, body, headers, timeout=30, tries=3):
         except urllib.error.HTTPError as e:
             if e.code not in RETRY_CODES:
                 raise
-            last = e
-            if i < tries - 1:
-                print(f"[Retry] {url.rsplit('/', 1)[-1]} -> HTTP {e.code}, 第 {i + 1} 次失败")
-                time.sleep(1.5 * (i + 1))
+            last, why = e, f"HTTP {e.code}"
+        except Exception as e:
+            if not _is_conn_drop(e):
+                raise
+            last, why = e, "连接被对端断开"
+        if i < tries - 1:
+            print(f"[Retry] {url.rsplit('/', 1)[-1]} -> {why}, 第 {i + 1} 次失败")
+            time.sleep(1.5 * (i + 1))
     raise last
 
 
@@ -147,11 +167,29 @@ class Upstream:
                     {"Authorization": f"Bearer {self.c.key}", "Content-Type": "application/json"})
         return json.loads(out)["choices"][0]["message"]["content"].strip()
 
+    # TTS 熔断: 连续失败 TTS_BREAKER_N 次后的 TTS_BREAKER_S 秒内直接跳过，不再每句话白等重试。
+    # 上游音频组过载往往持续几十分钟，每次都重试三遍只会让每句话多等 4~5 秒。
+    breaker_fails = 0
+    breaker_until = 0.0
+
     def tts(self, text: str) -> bytes:
+        now = time.time()
+        if now < self.breaker_until:
+            raise RuntimeError(f"TTS 熔断中，还剩 {int(self.breaker_until - now)} 秒")
         body = json.dumps({"model": self.c.tts_model, "voice": self.c.tts_voice,
                            "input": text, "response_format": "wav"}).encode()
         hdr = {"Authorization": f"Bearer {self.c.key}", "Content-Type": "application/json"}
-        return wav_to_pcm16k(_post(f"{self.c.base}/audio/speech", body, hdr))
+        try:
+            pcm = wav_to_pcm16k(_post(f"{self.c.base}/audio/speech", body, hdr))
+        except Exception:
+            self.breaker_fails += 1
+            if self.breaker_fails >= 2:
+                self.breaker_until = time.time() + 60
+                self.breaker_fails = 0
+                print("[Breaker] TTS 连续失败，60 秒内直接降级")
+            raise
+        self.breaker_fails = 0
+        return pcm
 
 
 # ---------------- 业务流程 ----------------
@@ -159,16 +197,16 @@ class Upstream:
 # Whisper 对中文偶尔输出繁体。这里只映射「指令、唤醒词、梦境」里会用到的常见字，
 # 不是完整的繁简转换(沙箱和现场都不该为此装第三方库)。
 _T2S = str.maketrans({
-    "氣": "气", "們": "们", "這": "这", "個": "个", "來": "来", "時": "时", "點": "点", "開": "开", "關": "关",
-    "夢": "梦", "見": "见", "記": "记", "錄": "录", "醒": "醒", "報": "报", "晨": "晨", "夜": "夜", "寢": "寝",
-    "睏": "困", "覺": "觉", "晚": "晚", "歲": "岁", "結": "结", "東": "东", "動": "动", "說": "说", "話": "话",
-    "麼": "么", "為": "为", "們": "们", "還": "还", "會": "会", "對": "对", "沒": "没", "請": "请", "謝": "谢",
-    "給": "给", "從": "从", "應": "应", "當": "当", "將": "将", "讓": "让", "與": "与", "裡": "里", "裏": "里",
-    "後": "后", "發": "发", "現": "现", "實": "实", "場": "场", "聽": "听", "調": "调", "音": "音", "量": "量",
-    "雲": "云", "雨": "雨", "聲": "声", "燈": "灯", "亮": "亮", "暗": "暗", "遠": "远", "運": "运", "過": "过",
-    "測": "测", "試": "试", "監": "监", "護": "护", "幫": "帮", "紀": "纪", "總": "总", "題": "题", "問": "问",
-    "錯": "错", "認": "认", "識": "识", "語": "语", "讀": "读", "學": "学", "車": "车", "門": "门", "間": "间",
-    "長": "长", "頭": "头", "嗎": "吗", "嗎": "吗", "鐘": "钟", "鬧": "闹", "響": "响", "電": "电", "腦": "脑",
+    "氣": "气", "們": "们", "這": "这", "個": "个", "來": "来", "時": "时", "點": "点", "開": "开",
+    "關": "关", "夢": "梦", "見": "见", "記": "记", "錄": "录", "報": "报", "寢": "寝", "睏": "困",
+    "覺": "觉", "歲": "岁", "結": "结", "東": "东", "動": "动", "說": "说", "話": "话", "麼": "么",
+    "為": "为", "還": "还", "會": "会", "對": "对", "沒": "没", "請": "请", "謝": "谢", "給": "给",
+    "從": "从", "應": "应", "當": "当", "將": "将", "讓": "让", "與": "与", "裡": "里", "裏": "里",
+    "後": "后", "發": "发", "現": "现", "實": "实", "場": "场", "聽": "听", "調": "调", "雲": "云",
+    "聲": "声", "燈": "灯", "遠": "远", "運": "运", "過": "过", "測": "测", "試": "试", "監": "监",
+    "護": "护", "幫": "帮", "紀": "纪", "總": "总", "題": "题", "問": "问", "錯": "错", "認": "认",
+    "識": "识", "語": "语", "讀": "读", "學": "学", "車": "车", "門": "门", "間": "间", "長": "长",
+    "頭": "头", "嗎": "吗", "鐘": "钟", "鬧": "闹", "響": "响", "電": "电", "腦": "脑",
 })
 
 
@@ -209,14 +247,16 @@ class Assistant:
         lines = self.notes_file.read_text(encoding="utf-8").splitlines()[-n:]
         return [json.loads(x) for x in lines if x.strip()]
 
-    def gate(self, text):
-        """唤醒词门控。返回去掉唤醒词后的文本；未唤醒返回 None。"""
-        now = self.clock()
+    def gate(self, text, t_arrive=None):
+        """唤醒词门控。返回去掉唤醒词后的文本；未唤醒返回 None。
+        t_arrive: 这句话“到达服务端”的时刻。判断追问窗口用它，而不是处理完的时刻——
+        上游重试、识别排队的耗时不该算进用户的追问窗口。"""
+        now = t_arrive if t_arrive is not None else self.clock()
         if not self.cfg.wake_words:
             return text
         for w in self.cfg.wake_words:
             if w in text:
-                self.awake_until = now + self.cfg.follow_up_s
+                self.awake_until = now + self.cfg.follow_up_s     # 先临时按到达时刻计，回复完成后会再延长
                 rest = text.split(w, 1)[1].lstrip("，,。 ")
                 return rest or "我在"
         if now < self.awake_until:
@@ -245,26 +285,34 @@ class Assistant:
 
     def process(self, pcm: bytes):
         """返回 None(未唤醒/无内容/疑似幻觉) 或 (回复PCM, 指令)。"""
+        t_arrive = self.clock()                      # 追问窗口按“话到达”的时刻算，不含上游重试耗时
+        t0 = time.time()
         raw = self.up.asr(pcm)
+        t_asr = time.time() - t0
         text = normalize_text(raw)
-        print(f"[ASR] {raw!r}" + (f" -> {text!r}" if text != raw else ""))
+        print(f"[ASR] {raw!r}" + (f" -> {text!r}" if text != raw else "") + f"  ({t_asr:.1f}s)")
         if is_hallucination(text):
             print("[Filter] 疑似静音/噪音幻觉，丢弃")
             return None
-        text = self.gate(text)
+        text = self.gate(text, t_arrive)
         if text is None:
             print("[Gate] 未听到唤醒词，丢弃")
             return None
         reply, cmd = self.handle_text(text)
         print(f"[Reply] {reply!r} cmd={cmd!r}")
+        t1 = time.time()
         try:
             audio = self.up.tts(reply)
         except Exception as e:
             # TTS 不可用时降级: 只要有板子指令，仍然返回指令(空音频)，板子用自带离线语音(如"晚安，开始守夜")确认。
             print(f"[TTS 失败] {type(e).__name__}: {e}")
             audio = b""
+        print(f"[Time] ASR {t_asr:.1f}s + TTS {time.time() - t1:.1f}s = 共 {time.time() - t0:.1f}s")
         if not audio and not cmd:
             raise RuntimeError("语音合成不可用，且这句话没有可执行的指令")
+        # 回复发出后，用户还要听完再说下一句，所以追问窗口从“回复完成”这一刻重新起算。
+        if self.cfg.wake_words and self.awake_until > 0:
+            self.awake_until = max(self.awake_until, self.clock() + self.cfg.follow_up_s)
         return audio, cmd
 
 

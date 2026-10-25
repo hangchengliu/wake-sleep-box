@@ -253,6 +253,119 @@
       list-style: none; display: flex; align-items: center; justify-content: space-between;
     }
     details summary::-webkit-details-marker { display: none; }
+
+    /* =========================================================
+       WS2812 8-LED Debugger Styles (Toggle switches, Beads & Cards)
+       ========================================================= */
+    .switch {
+      position: relative; display: inline-block; width: 44px; height: 24px; vertical-align: middle;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #1e293b; border: 1px solid #334155;
+      transition: all .25s ease; border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+      background-color: #94a3b8; transition: all .25s ease; border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #0284c7; border-color: #38bdf8;
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+      background-color: #ffffff;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
+    }
+    .led-ring-visualizer {
+      display: flex; align-items: center; justify-content: center;
+      gap: 14px; flex-wrap: wrap; padding: 20px;
+      background: radial-gradient(circle at center, #0f1c38 0%, #060b17 100%);
+      border: 1px solid #1e335a; border-radius: 16px; margin: 16px 0;
+      box-shadow: inset 0 2px 12px rgba(0,0,0,0.4);
+    }
+    .led-bead {
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none; border: 2px solid #24355a;
+      background: #090e1c; color: #64748b; position: relative;
+    }
+    .led-bead .bead-num { font-size: 13px; font-weight: 800; line-height: 1; }
+    .led-bead .bead-sub { font-size: 9px; opacity: 0.8; margin-top: 1px; }
+    .led-bead.on {
+      color: #ffffff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+      border-color: rgba(255, 255, 255, 0.95);
+      transform: scale(1.12);
+    }
+    .led-bead:hover {
+      transform: translateY(-2px) scale(1.08);
+    }
+    .led-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .led-card {
+      background: #090e1c; border: 1px solid #1a2744; border-radius: 14px;
+      padding: 12px 14px; transition: all 0.2s ease;
+    }
+    .led-card.active {
+      border-color: #2b4c80; background: linear-gradient(145deg, #0f1b36, #090e1c);
+      box-shadow: 0 4px 16px rgba(2, 132, 199, 0.15);
+    }
+    .led-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .led-title-wrap {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .led-indicator-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #1e293b; border: 1px solid #334155;
+      transition: all 0.2s;
+    }
+    .led-indicator-dot.on {
+      border-color: #ffffff;
+      box-shadow: 0 0 10px currentColor;
+    }
+    .led-color-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .led-color-picker-wrap {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .led-color-picker {
+      -webkit-appearance: none; -moz-appearance: none; appearance: none;
+      width: 32px; height: 32px; border: none; border-radius: 8px;
+      cursor: pointer; background: transparent; padding: 0;
+    }
+    .led-color-picker::-webkit-color-swatch-wrapper { padding: 0; }
+    .led-color-picker::-webkit-color-swatch {
+      border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .led-hex-input {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; font-weight: 700; color: #bae6fd;
+      background: #050b17; border: 1px solid #1e335a; border-radius: 6px;
+      padding: 5px 8px; width: 78px; text-align: center;
+    }
+    .color-chips {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;
+    }
+    .color-chip {
+      width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.25);
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .color-chip:hover {
+      transform: scale(1.25); border-color: #ffffff;
+    }
   </style>
 </head>
 <body>
@@ -322,6 +435,7 @@
         <button class="action-btn" style="background:linear-gradient(135deg,#312e81,#4338ca);" onclick="sendCmd('N:1')">🌙 开始守夜（真熄屏）</button>
         <button class="action-btn" style="background:linear-gradient(135deg,#9a3412,#ea580c);" onclick="triggerMorningReport()">☀️ 早安 · 语音报告 (开发板喇叭)</button>
         <button class="action-btn" id="boardWhiteNoiseBtn" style="background:linear-gradient(135deg,#065f46,#059669);" onclick="toggleBoardWhiteNoise()">🌧️ 板载助眠白噪音 (3W扬声器)</button>
+        <button class="action-btn" style="background:#1e293b;border-color:#334155;" onclick="triggerSimNoise()">🧪 模拟噪音 (68dB)</button>
         <button class="action-btn" style="background:#1e293b;border-color:#334155;" onclick="sendCmd('W:4')">🧪 模拟起夜</button>
         <button class="action-btn" style="background:#1e293b;border-color:#334155;" onclick="sendCmd('W:5')">🧪 模拟漏光</button>
       </div>
@@ -349,6 +463,10 @@
       </div>
       <div class="meter-bg">
         <div class="meter-fill" id="dbMeter"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:8px;">
+        <span id="noiseLevelTag" style="color:var(--green);font-weight:700;">🟢 卧室环境安静 (&lt;45dB)</span>
+        <span style="color:var(--muted);">突发噪音判定门限: 动态自适应 (通常 &gt;48~50dB)</span>
       </div>
       <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">
         16-Bar 实时声谱分析（与开发板 LCD 屏上的 16 根彩色动态声谱柱同步）：
@@ -474,12 +592,12 @@
           </div>
           <span id="extPres" class="badge-off">未接入 (离线)</span>
         </div>
-        <div class="ext-item">
+        <div class="ext-item" style="border-color:#38bdf8;background:linear-gradient(135deg,#0e1e3b,#090e1c);">
           <div>
             <b>💡 WS2812 琥珀柔光灯环</b><br/>
-            <small style="color:var(--muted);">GPIO 20 · 起夜微光照明不抑褪黑素</small>
+            <small style="color:#7dd3fc;">GPIO 20 · 8颗 RGB LED (支持下方单灯独立开关与色彩调试)</small>
           </div>
-          <span id="extLed" class="badge-on">就绪</span>
+          <span id="extLed" class="badge-on">8灯待命</span>
         </div>
         <div class="ext-item">
           <div>
@@ -488,6 +606,50 @@
           </div>
           <span id="extBacklight" class="badge-on">正常供电</span>
         </div>
+      </div>
+
+      <!-- =========================================================
+           WS2812 8-LED Ring Interactive Debugger & Color Switch Panel
+           ========================================================= -->
+      <div class="led-debug-container" style="margin-top:20px;border-top:1px solid #1a2744;padding-top:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:8px;">
+              <span>💡 WS2812 8-LED 灯环独立开关与色彩调试台</span>
+              <span id="ledActiveBadge" class="badge-on" style="font-size:11px;">1 / 8 颗开启</span>
+            </div>
+            <div style="font-size:12.5px;color:var(--muted);margin-top:2px;">
+              每个 LED 灯均拥有独立电源开关、1677 万色拾色器与快速色卡，操作即时同步开发板硬件 (GPIO 20)
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span id="ledCmdFeedback" style="font-size:12px;color:#94a3b8;background:#090e1c;padding:5px 12px;border-radius:8px;border:1px solid #1e293b;">
+              🟡 [离线仿真] 指令待命
+            </span>
+          </div>
+        </div>
+
+        <!-- Master Global Quick Actions & Brightness Slider -->
+        <div style="background:#090e1c;border:1px solid #1a2744;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button class="action-btn" style="padding:6px 12px;font-size:12px;background:#0369a1;" onclick="setAllLeds(true)">🔘 全部开启</button>
+            <button class="action-btn" style="padding:6px 12px;font-size:12px;background:#334155;" onclick="setAllLeds(false)">⬛ 全部熄灭</button>
+            <button class="action-btn" style="padding:6px 12px;font-size:12px;background:linear-gradient(135deg,#9333ea,#c084fc);" onclick="applyRainbowTest()">🌈 幻彩彩虹测试</button>
+            <button class="action-btn" style="padding:6px 12px;font-size:12px;background:linear-gradient(135deg,#b45309,#f59e0b);" onclick="applyPresetAmber()">🌙 经典琥珀暖光</button>
+            <button class="action-btn" style="padding:6px 12px;font-size:12px;background:#475569;" onclick="applyPresetWhite()">⚪ 全亮纯白测试</button>
+            <button class="action-btn" id="chaseBtn" style="padding:6px 12px;font-size:12px;background:linear-gradient(135deg,#047857,#10b981);" onclick="toggleLedChase()">🏃 流水跑马灯</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;min-width:210px;">
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap;">🌟 调试亮度: <b id="ledBriLabel" style="color:#fff;">100%</b></span>
+            <input type="range" id="ledMasterBrightness" min="5" max="100" value="100" style="flex:1;accent-color:var(--cyan);" oninput="updateLedMasterBrightness(this.value)" />
+          </div>
+        </div>
+
+        <!-- Visual Ring Representation (8 Beads) -->
+        <div class="led-ring-visualizer" id="ledVisualizer"></div>
+
+        <!-- 8 Individual LED Channels Grid -->
+        <div class="led-grid" id="ledGrid"></div>
       </div>
     </div>
 
@@ -554,6 +716,27 @@
           </div>
           <div id="dreamResult" style="padding:10px 12px;border-radius:10px;background:#131d35;font-size:12.5px;color:#e2e8f0;line-height:1.6;min-height:50px;">
             💬 输入梦境后点击「AI 解梦」，系统将结合昨晚环境深度解析。
+          </div>
+        </div>
+
+        <!-- 板载语音对话配网: 通过蓝牙把 Wi-Fi 和中转服务器地址写入开发板(存在板子 NVS，不进源码) -->
+        <div style="background:#070d1a;padding:16px;border-radius:14px;border:1px solid #1e335a;margin-bottom:14px;grid-column:1/-1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div style="font-size:14px;font-weight:700;color:#22d3ee;">📶 板载语音对话 · 蓝牙配网</div>
+            <span class="card-tag" id="chatStateTag">状态：未知（需先连接蓝牙）</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">
+            开发板不用键盘：在这里填 Wi-Fi 和电脑上中转服务的地址，经蓝牙写入板子并保存。配好后对着板子说“小夜，开始守夜”即可。
+            守夜期间板子不会录音，也不会上传。
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:10px;">
+            <input type="text" id="cfgSsid" placeholder="Wi-Fi 名称 (SSID)" autocomplete="off" style="background:#0b1324;border:1px solid #283a65;border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;" />
+            <input type="password" id="cfgPass" placeholder="Wi-Fi 密码" autocomplete="new-password" style="background:#0b1324;border:1px solid #283a65;border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;" />
+            <input type="text" id="cfgServer" placeholder="中转服务地址，如 http://172.20.10.2:8787" autocomplete="off" style="background:#0b1324;border:1px solid #283a65;border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;" />
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="ble-btn" style="padding:8px 14px;" onclick="saveChatCfg()">📲 写入开发板</button>
+            <span id="cfgMsg" style="font-size:12.5px;color:var(--muted);">密码只经蓝牙发给板子并保存在板子上，网页不保存。</span>
           </div>
         </div>
 
@@ -661,11 +844,13 @@
         statusText.textContent = '已连接 · ' + (bleDevice ? bleDevice.name : 'ESP32-S3');
         btn.classList.add('disconnect');
         btnText.textContent = '断开蓝牙';
+        updateCmdFeedback('蓝牙已连接 · 实时驱动 ESP32-S3 (GPIO 20)');
       } else {
         pill.classList.remove('connected');
         statusText.textContent = '未连接蓝牙';
         btn.classList.remove('disconnect');
         btnText.textContent = '连接开发板蓝牙';
+        updateCmdFeedback('蓝牙未连接 · 处于网页离线仿真');
       }
     }
 
@@ -760,12 +945,29 @@
         // White noise sync
         if (d.wn !== undefined) updateWhiteNoiseUI(d.wn === 1);
 
+        // 语音对话状态(传感器包里的 chat/wifi 字段)
+        updateChatState(d);
+
         // 2. Mic dB & Spectrum
         const db = Number(d.db || 35);
         document.getElementById('dbValue').textContent = db.toFixed(1);
         document.getElementById('pctValue').textContent = `峰值 ${d.pct || 0}%`;
         const meterPct = Math.min(100, Math.max(5, ((db - 30) / 65) * 100));
         document.getElementById('dbMeter').style.width = meterPct + '%';
+
+        const nlTag = document.getElementById('noiseLevelTag');
+        if (nlTag) {
+          if (db < 45) {
+            nlTag.textContent = '🟢 卧室环境安静 (<45dB)';
+            nlTag.style.color = 'var(--green)';
+          } else if (db < 55) {
+            nlTag.textContent = '🟡 中度声响 (45~55dB)';
+            nlTag.style.color = 'var(--amber)';
+          } else {
+            nlTag.textContent = '🔴 突发噪音冲击 (>55dB)';
+            nlTag.style.color = 'var(--red)';
+          }
+        }
 
         // Animate 16-bar spectrum based on dB & peak
         const baseH = Math.max(4, (db - 30) * 1.3);
@@ -816,6 +1018,18 @@
           presEl.textContent = '未接入 (离线)';
           presEl.className = 'badge-off';
         }
+
+        // WS2812 LED Ring Status sync
+        const ledEl = document.getElementById('extLed');
+        if (d.led !== undefined && ledEl) {
+          if (d.led > 0) {
+            ledEl.textContent = `${d.led} / 8 颗点亮`;
+            ledEl.className = 'badge-on';
+          } else {
+            ledEl.textContent = '全部熄灭';
+            ledEl.className = 'badge-off';
+          }
+        }
       } catch (e) {
         console.warn(e);
       }
@@ -845,6 +1059,13 @@
 
     function triggerMorningReport() {
       sendCmd('N:2'); // 让开发板自身的 3W 喇叭独立播报早安真人声
+    }
+
+    function triggerSimNoise() {
+      if (!lastWake || !lastWake.night) {
+        alert('💡 提示：突发噪音冲击事件是在「🌙 开始守夜」（真熄屏）模式下持续统计的。\n\n已下发 W:3 模拟指令！点击「开始守夜」后，在安静房间拍手、敲桌或点击「模拟噪音」，均可实时记录突发噪音事件！');
+      }
+      sendCmd('W:3');
     }
 
     // 记梦本解析
@@ -878,6 +1099,42 @@
       box.innerHTML = html;
     }
 
+    // ---------- 板载语音对话: 蓝牙配网 ----------
+    const CHAT_STATE_TEXT = {
+      off: '未配置', wifi: '正在连接 Wi-Fi…', ready: '在线 · 正在听', rec: '正在录音',
+      up: '已发送，等待回复', play: '正在播放回复', err: '出错（板子会自动重试）'
+    };
+    function updateChatState(d) {
+      const tag = document.getElementById('chatStateTag');
+      if (!tag || d.chat === undefined) return;
+      tag.textContent = `状态：${CHAT_STATE_TEXT[d.chat] || d.chat}${d.wifi ? ' · Wi-Fi 已连' : ''}`;
+      tag.style.color = d.chat === 'ready' || d.chat === 'rec' || d.chat === 'play' ? '#34d399'
+                      : d.chat === 'err' ? '#f87171' : '';
+    }
+    async function saveChatCfg() {
+      const msg = document.getElementById('cfgMsg');
+      const ssid = document.getElementById('cfgSsid').value.trim();
+      const pass = document.getElementById('cfgPass').value;
+      let server = document.getElementById('cfgServer').value.trim().replace(/\/+$/, '');
+      const bad = (t) => { msg.textContent = '❌ ' + t; msg.style.color = '#f87171'; };
+      if (!bleChar) return bad('请先点右上角连接开发板蓝牙。');
+      if (!ssid) return bad('请填写 Wi-Fi 名称。');
+      if (!/^http:\/\/[^\s|]+$/.test(server)) return bad('服务地址必须以 http:// 开头，例如 http://172.20.10.2:8787');
+      // 分隔符是 | ，所以任何一项含 | 都会让板子解析错位，直接拒绝。
+      if (ssid.includes('|') || pass.includes('|')) return bad('Wi-Fi 名称和密码里不能包含 | 字符。');
+      const bytes = new TextEncoder().encode('C:' + ssid + '|' + pass + '|' + server);
+      // 蓝牙特征值一次最多约 244 字节(固件已协商 MTU 247)。超出就拒绝，不静默截断。
+      if (bytes.length > 240) return bad('内容过长（Wi-Fi 名称、密码和地址合计需小于 235 字节）。');
+      try {
+        await bleChar.writeValue(bytes);
+        msg.textContent = '✅ 已写入开发板并保存。板子正在连接 Wi-Fi，看右上角状态变为“在线 · 正在听”。';
+        msg.style.color = '#34d399';
+        document.getElementById('cfgPass').value = '';
+      } catch (e) {
+        bad('写入失败：' + e.message);
+      }
+    }
+
     // 语音助手
     function vaSubmitText() {
       const input = document.getElementById('vaText');
@@ -898,8 +1155,11 @@
       } else if (/起夜/.test(text)) {
         sendCmd('W:4');
         log.innerHTML = `<div style="color:var(--cyan);"><b>Wake：</b>已向开发板下发模拟起夜事件。</div>` + log.innerHTML;
+      } else if (/噪音|声音|敲桌|拍手|鸣笛/.test(text)) {
+        triggerSimNoise();
+        log.innerHTML = `<div style="color:var(--cyan);"><b>Wake：</b>已向开发板下发模拟夜间突发噪音事件 (68dB)。</div>` + log.innerHTML;
       } else {
-        log.innerHTML = `<div style="color:var(--muted);"><b>Wake：</b>可输入“开始守夜”、“早安晨报”、“白噪音”、“起夜测试”。</div>` + log.innerHTML;
+        log.innerHTML = `<div style="color:var(--muted);"><b>Wake：</b>可输入“开始守夜”、“早安晨报”、“白噪音”、“起夜测试”、“模拟噪音”。</div>` + log.innerHTML;
       }
     }
 
@@ -911,6 +1171,329 @@
         console.warn(e);
       }
     }
+
+    // =========================================================
+    // WS2812 8-LED Ring Debugger & Individual Channel Control
+    // =========================================================
+    const LED_COUNT = 8;
+    const DEFAULT_PRESET_COLORS = [
+      '#ff8c00', // LED #1: 经典琥珀暖光 (起夜微光照明)
+      '#f59e0b', // LED #2: 暖阳橙黄
+      '#10b981', // LED #3: 护眼翠绿
+      '#06b6d4', // LED #4: 青空碧色
+      '#3b82f6', // LED #5: 柔和蔚蓝
+      '#6366f1', // LED #6: 舒眠靛蓝
+      '#a855f7', // LED #7: 幻梦浅紫
+      '#ec4899'  // LED #8: 晨曦玫粉
+    ];
+    const PRESET_CHIPS = ['#ff8c00', '#ffffff', '#ef4444', '#10b981', '#38bdf8', '#a855f7'];
+
+    let ledStates = Array.from({ length: LED_COUNT }, (_, i) => ({
+      enabled: i === 0, // 初始 LED 1 开启（对应硬件起夜微光琥珀灯）
+      color: DEFAULT_PRESET_COLORS[i]
+    }));
+    let ledMasterBrightness = 1.0;
+    let chaseTimer = null;
+    let chaseStep = 0;
+
+    function hexToRgb(hex) {
+      hex = hex.replace('#', '');
+      if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+      }
+      const num = parseInt(hex, 16);
+      return {
+        r: (num >> 16) & 255,
+        g: (num >> 8) & 255,
+        b: num & 255
+      };
+    }
+
+    function initLedDebugger() {
+      const visContainer = document.getElementById('ledVisualizer');
+      const gridContainer = document.getElementById('ledGrid');
+      if (!visContainer || !gridContainer) return;
+
+      // 1. Render Visualizer beads
+      visContainer.innerHTML = '';
+      for (let i = 0; i < LED_COUNT; i++) {
+        const bead = document.createElement('div');
+        bead.className = 'led-bead';
+        bead.id = 'led-bead-' + i;
+        bead.title = `点击切换 LED #${i + 1} 开关`;
+        bead.onclick = () => toggleLedSwitch(i);
+        bead.innerHTML = `
+          <span class="bead-num">#${i + 1}</span>
+          <span class="bead-sub">CH${i}</span>
+        `;
+        visContainer.appendChild(bead);
+      }
+
+      // 2. Render 8 channel cards
+      gridContainer.innerHTML = '';
+      for (let i = 0; i < LED_COUNT; i++) {
+        const card = document.createElement('div');
+        card.className = 'led-card';
+        card.id = 'led-card-' + i;
+
+        // Color chips HTML
+        const chipsHtml = PRESET_CHIPS.map(c => `
+          <div class="color-chip" style="background:${c};" title="快速设为 ${c}" onclick="setLedColor(${i}, '${c}')"></div>
+        `).join('');
+
+        card.innerHTML = `
+          <div class="led-card-header">
+            <div class="led-title-wrap">
+              <div class="led-indicator-dot" id="led-dot-${i}"></div>
+              <div>
+                <b style="font-size:13.5px;color:var(--text);">LED #${i + 1}</b>
+                <span style="font-size:11px;color:var(--muted);margin-left:4px;">(通道 ${i})</span>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="led-sw-${i}" onchange="onLedSwitchChange(${i}, this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="led-color-row">
+            <span style="font-size:12px;color:var(--muted);">灯珠颜色:</span>
+            <div class="led-color-picker-wrap">
+              <input type="color" class="led-color-picker" id="led-picker-${i}" value="${ledStates[i].color}" oninput="onLedColorInput(${i}, this.value)">
+              <input type="text" class="led-hex-input" id="led-hex-${i}" value="${ledStates[i].color.toUpperCase()}" onchange="onLedHexChange(${i}, this.value)">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px;">
+            <span style="font-size:11px;color:var(--muted);">快捷微调:</span>
+            <div class="color-chips">${chipsHtml}</div>
+          </div>
+        `;
+        gridContainer.appendChild(card);
+      }
+
+      updateLedUI();
+    }
+
+    function updateLedUI() {
+      let activeCount = 0;
+      for (let i = 0; i < LED_COUNT; i++) {
+        const state = ledStates[i];
+        if (state.enabled) activeCount++;
+
+        // Switch
+        const sw = document.getElementById('led-sw-' + i);
+        if (sw) sw.checked = state.enabled;
+
+        // Card active style
+        const card = document.getElementById('led-card-' + i);
+        if (card) card.classList.toggle('active', state.enabled);
+
+        // Dot
+        const dot = document.getElementById('led-dot-' + i);
+        if (dot) {
+          dot.classList.toggle('on', state.enabled);
+          dot.style.background = state.enabled ? state.color : '#1e293b';
+          dot.style.color = state.color;
+          dot.style.boxShadow = state.enabled ? `0 0 10px ${state.color}` : 'none';
+        }
+
+        // Color Picker & Hex
+        const picker = document.getElementById('led-picker-' + i);
+        if (picker && picker.value !== state.color) picker.value = state.color;
+        const hex = document.getElementById('led-hex-' + i);
+        if (hex && document.activeElement !== hex) hex.value = state.color.toUpperCase();
+
+        // Bead in visualizer
+        const bead = document.getElementById('led-bead-' + i);
+        if (bead) {
+          bead.classList.toggle('on', state.enabled);
+          if (state.enabled) {
+            bead.style.background = state.color;
+            bead.style.boxShadow = `0 0 18px ${state.color}, 0 0 4px #ffffff, inset 0 0 6px rgba(255,255,255,0.6)`;
+            bead.style.borderColor = '#ffffff';
+          } else {
+            bead.style.background = '#090e1c';
+            bead.style.boxShadow = 'none';
+            bead.style.borderColor = '#24355a';
+          }
+        }
+      }
+
+      // Active count badge
+      const activeBadge = document.getElementById('ledActiveBadge');
+      if (activeBadge) {
+        activeBadge.textContent = `${activeCount} / ${LED_COUNT} 颗开启`;
+        activeBadge.className = activeCount > 0 ? 'badge-on' : 'badge-off';
+      }
+
+      // Ext Sensor list badge
+      const extLed = document.getElementById('extLed');
+      if (extLed) {
+        if (activeCount > 0) {
+          extLed.textContent = `${activeCount} / 8 颗点亮`;
+          extLed.className = 'badge-on';
+        } else {
+          extLed.textContent = '全部熄灭';
+          extLed.className = 'badge-off';
+        }
+      }
+    }
+
+    function updateCmdFeedback(cmd) {
+      const fb = document.getElementById('ledCmdFeedback');
+      if (!fb) return;
+      const isConn = bleDevice && bleDevice.gatt.connected;
+      const icon = isConn ? '🟢 [已同步板端]' : '🟡 [离线仿真]';
+      fb.innerHTML = `<span style="color:${isConn ? 'var(--cyan)' : 'var(--amber)'};font-weight:700;">${icon}</span> <code>${cmd}</code>`;
+    }
+
+    async function sendSingleLedCmd(index) {
+      const led = ledStates[index];
+      let r = 0, g = 0, b = 0;
+      if (led.enabled) {
+        const rgb = hexToRgb(led.color);
+        r = Math.round(rgb.r * ledMasterBrightness);
+        g = Math.round(rgb.g * ledMasterBrightness);
+        b = Math.round(rgb.b * ledMasterBrightness);
+      }
+      const cmd = `L:${index},${r},${g},${b}`;
+      await sendCmd(cmd);
+      updateCmdFeedback(cmd);
+      updateLedUI();
+    }
+
+    async function sendBatchLedsCmd() {
+      const parts = [];
+      for (let i = 0; i < LED_COUNT; i++) {
+        const led = ledStates[i];
+        let r = 0, g = 0, b = 0;
+        if (led.enabled) {
+          const rgb = hexToRgb(led.color);
+          r = Math.round(rgb.r * ledMasterBrightness);
+          g = Math.round(rgb.g * ledMasterBrightness);
+          b = Math.round(rgb.b * ledMasterBrightness);
+        }
+        parts.push(`${r},${g},${b}`);
+      }
+      const cmd = `L:B,${parts.join(',')}`;
+      await sendCmd(cmd);
+      updateCmdFeedback(cmd);
+      updateLedUI();
+    }
+
+    function toggleLedSwitch(index) {
+      ledStates[index].enabled = !ledStates[index].enabled;
+      sendSingleLedCmd(index);
+    }
+
+    function onLedSwitchChange(index, checked) {
+      ledStates[index].enabled = checked;
+      sendSingleLedCmd(index);
+    }
+
+    function onLedColorInput(index, val) {
+      ledStates[index].color = val;
+      if (ledStates[index].enabled) {
+        sendSingleLedCmd(index);
+      } else {
+        updateLedUI();
+      }
+    }
+
+    function onLedHexChange(index, val) {
+      if (!val.startsWith('#')) val = '#' + val;
+      if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+        ledStates[index].color = val;
+        if (ledStates[index].enabled) {
+          sendSingleLedCmd(index);
+        } else {
+          updateLedUI();
+        }
+      }
+    }
+
+    function setLedColor(index, color) {
+      ledStates[index].color = color;
+      if (ledStates[index].enabled) {
+        sendSingleLedCmd(index);
+      } else {
+        updateLedUI();
+      }
+    }
+
+    function setAllLeds(turnOn) {
+      stopLedChase();
+      for (let i = 0; i < LED_COUNT; i++) {
+        ledStates[i].enabled = turnOn;
+      }
+      sendBatchLedsCmd();
+    }
+
+    function applyRainbowTest() {
+      stopLedChase();
+      for (let i = 0; i < LED_COUNT; i++) {
+        ledStates[i].enabled = true;
+        ledStates[i].color = DEFAULT_PRESET_COLORS[i];
+      }
+      sendBatchLedsCmd();
+    }
+
+    function applyPresetAmber() {
+      stopLedChase();
+      for (let i = 0; i < LED_COUNT; i++) {
+        ledStates[i].color = '#ff8c00';
+        ledStates[i].enabled = (i === 0); // 经典夜灯模式：仅点亮第1颗微光琥珀
+      }
+      sendBatchLedsCmd();
+    }
+
+    function applyPresetWhite() {
+      stopLedChase();
+      for (let i = 0; i < LED_COUNT; i++) {
+        ledStates[i].color = '#ffffff';
+        ledStates[i].enabled = true;
+      }
+      sendBatchLedsCmd();
+    }
+
+    function updateLedMasterBrightness(val) {
+      ledMasterBrightness = Number(val) / 100.0;
+      const lbl = document.getElementById('ledBriLabel');
+      if (lbl) lbl.textContent = val + '%';
+      sendBatchLedsCmd();
+    }
+
+    function toggleLedChase() {
+      if (chaseTimer) {
+        stopLedChase();
+      } else {
+        startLedChase();
+      }
+    }
+
+    function startLedChase() {
+      const btn = document.getElementById('chaseBtn');
+      if (btn) btn.textContent = '⏹️ 停止流水跑马';
+      chaseStep = 0;
+      chaseTimer = setInterval(() => {
+        for (let i = 0; i < LED_COUNT; i++) {
+          ledStates[i].enabled = (i === chaseStep);
+        }
+        sendBatchLedsCmd();
+        chaseStep = (chaseStep + 1) % LED_COUNT;
+      }, 250);
+    }
+
+    function stopLedChase() {
+      if (chaseTimer) {
+        clearInterval(chaseTimer);
+        chaseTimer = null;
+        const btn = document.getElementById('chaseBtn');
+        if (btn) btn.textContent = '🏃 流水跑马灯';
+      }
+    }
+
+    // Initialize LED debugger
+    initLedDebugger();
 
     // Initial view sync
     updatePageVisibility();

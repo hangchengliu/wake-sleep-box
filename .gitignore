@@ -33,3 +33,8 @@ voice_relay/notes.jsonl
 voice_relay/probe_*.wav
 voice_relay/test_*.jsonl
 display_name/wifi_secrets.h
+
+voice_relay/alt_tts_*.wav
+*.log
+voice_relay/*.log
+

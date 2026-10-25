@@ -12,7 +12,7 @@ BUILD=$SKETCH/build
 CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"
 ESPTOOL=/Users/hancg/Library/Arduino15/packages/esp32/tools/esptool_py/5.3.1/esptool
 TMP="${TMPDIR:-/tmp}"
-LOG_SECONDS=8
+LOG_SECONDS="${LOG_SECONDS:-8}"   # 可用环境变量加长，例如 LOG_SECONDS=90 ./flash.sh --log-only
 
 capture_log() {
   echo "== 串口日志 (${LOG_SECONDS}s) =="

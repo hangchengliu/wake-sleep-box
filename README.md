@@ -7,26 +7,58 @@
 > **Project Wake: Ambient Sleep Hygiene & Bedroom Environment Monitor**  
 > 开发者：**刘航成 & 夏工**  
 > 主控平台：**ESP32-S3-Korvo-2 V3 (KSDIY Edition)**  
-> 适用场景：黑客松项目 / 智能家居睡眠卫生监测 / Web Bluetooth 物联网中控
+> 适用场景：黑客松项目 / 智能家居睡眠卫生监测 / Web Bluetooth 物联网中控 / 边缘轻量语音交互
 
 [![ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red.svg)](https://www.espressif.com/)
 [![Web Bluetooth](https://img.shields.io/badge/Web-Bluetooth%20API-blue.svg)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API)
 [![Framework: Arduino](https://img.shields.io/badge/Framework-Arduino-teal.svg)](https://github.com/arduino/arduino-cli)
+[![3D Printing: STL & OpenSCAD](https://img.shields.io/badge/3D%20Printing-Ready-orange.svg)](3d_models/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+---
+
+## 🏆 黑客松结项成果全景 (Hackathon Delivery Overview)
+
+本项目在黑客松竞赛中完成了**软硬件全栈闭环交付**：从工业设计建模、ESP32-S3 双核固件开发、端侧轻量自适应 VAD 算法，到局域网大模型语音中枢与 Web Bluetooth 跨平台前端控制台，全链路已贯通并实机验证通过。
+
+```
+                                  Wake 全系统技术拓扑图
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                                物理硬件层                                    │
+  │  [ESP32-S3 Korvo 2 V3] ── 双麦克风 ES7210 ── ES8311 音频DAC + 3W音腔扬声器   │
+  │  ├── 1.69寸 ST7789 IPS 触摸屏 (TCA9554A 物理切断背光实现 0 Lux)            │
+  │  ├── WS2812 8-RGB 灯环 (RMT高精度驱动 / 起夜柔和琥珀光 / 彩虹呼吸调光)        │
+  │  ├── I2C 传感器集群: BH1750 (光照 0.1-65535 lx) + SPA06 (气压/温度)        │
+  │  └── GPIO 传感器: AM412 PIR 人体红外感应 + 6 键矩阵分压器                   │
+  └────────────────────────┬─────────────────────────────┬──────────────────────┘
+                           │ BLE 5.0 GATT (5Hz)          │ Wi-Fi 802.11 b/g/n
+                           ▼                             ▼
+  ┌──────────────────────────────────┐        ┌─────────────────────────────────┐
+  │         Web 控制台前端           │        │   局域网语音中转 (Voice Relay)  │
+  │     (ble_dashboard.html)         │        │       (voice_relay/server.py)   │
+  │  • Web Bluetooth 免驱直连        │        │  • 端侧自适应噪声底 VAD 切割    │
+  │  • 传感器实时波形 & 夜间守夜模拟 │        │  • Whisper ASR + 繁简纠错映射   │
+  │  • WS2812 环形灯可视化调色盘     │        │  • LLM 意图识别 (守夜/记梦/问答)│
+  │  • 蓝牙空中一键 Wi-Fi 配网       │        │  • TTS 语音合成 + 60s 故障熔断   │
+  │  • Apple Watch × Wake 双轨交叉   │        │  • 离线状态降级与本地梦境笔记   │
+  └──────────────────────────────────┘        └─────────────────────────────────┘
+```
 
 ---
 
 ## 目录
 1. [项目愿景与产品哲学](#1-项目愿景与产品哲学)
 2. [核心硬件架构与参数](#2-核心硬件架构与参数)
-3. [完整引脚与外设映射总表](#3-完整引脚与外设映射总表)
-4. [固件分区与非破坏性双-OTA-机制](#4-固件分区与非破坏性双-ota-机制)
-5. [工具链、编译与一键烧录指南](#5-工具链编译与一键烧录指南)
-6. [BLE-GATT-通信协议与数据结构](#6-ble-gatt-通信协议与数据结构)
-7. [板载外设驱动与算法细节](#7-板载外设驱动与算法细节)
-8. [外接四大传感器防呆插线图](#8-外接四大传感器防呆插线图)
-9. [Web-Bluetooth-前端架构与黑科技](#9-web-bluetooth-前端架构与黑科技)
-10. [三分钟黑客松现场演示-Pitch-剧本](#10-三分钟黑客松现场演示-pitch-剧本)
+3. [工业设计与 3D 打印外壳方案库](#3-工业设计与-3d-打印外壳方案库)
+4. [完整引脚与外设映射总表](#4-完整引脚与外设映射总表)
+5. [固件分区与非破坏性双 OTA 机制](#5-固件分区与非破坏性双-ota-机制)
+6. [板载语音交互系统：端侧 VAD 与云端 Relay](#6-板载语音交互系统端侧-vad-与云端-relay)
+7. [WS2812 8-LED 环形灯控制与 RMT 驱动](#7-ws2812-8-led-环形灯控制与-rmt-驱动)
+8. [BLE GATT 通信协议与数据结构](#8-ble-gatt-通信协议与数据结构)
+9. [外接四大传感器防呆插线图](#9-外接四大传感器防呆插线图)
+10. [Web Bluetooth 前端控制台与黑科技](#10-web-bluetooth-前端控制台与黑科技)
+11. [工具链、编译与一键烧录指南](#11-工具链编译与一键烧录指南)
+12. [Demo Day 路演剧本与自动化 Presentation](#12-demo-day-路演剧本与自动化-presentation)
 
 ---
 
@@ -41,6 +73,10 @@
   - **早晨一句话复盘**：醒来主动告知昨晚环境最大痛点（“昨晚 03:15 窗外有 64dB 噪音导致你早醒，建议关窗”）。
   - **坚决不开摄像头**：全黑环境下普通摄像头无效且带来强烈隐私侵犯感，用多传感器融合状态机完美替代视觉。
 
+<p align="center">
+  <img src="3d_models/wake_meme_grand_5_philosophies.jpg" alt="Wake 5大产品哲学" width="85%">
+</p>
+
 ---
 
 ## 2. 核心硬件架构与参数
@@ -53,36 +89,58 @@
 | **触摸芯片** | 海栎基 CST816S | 电容多点触摸控制器，I2C 接口（地址 `0x15`） |
 | **音频输出** | ES8311 音频 DAC + NS4150B 功放 | 支持 16kHz/44.1kHz 16-bit I2S，外接 3W 腔体扬声器 |
 | **音频输入** | ES7210 四通道麦克风 ADC | 驱动双路模拟麦克风 MSM381A3729H9CP，I2C 地址 `0x40` |
+| **氛围夜灯** | WS2812B 8颗 RGB 灯环 | GPIO 20 驱动，硬件 RMT 纳秒级时序，支持调光与单珠寻址 |
 | **IO 扩展** | TCA9554A 8位 IO 扩展芯片 | I2C 地址 `0x38`，位 1 控制屏幕背光供电，位 0 控制外设供电 |
 | **板载按键** | 6 键矩阵分压器（GPIO 5） | 单 ADC 引脚通过电阻分压精准识别 K1~K6 六颗物理按键 |
 | **无线通信** | 2.4GHz Wi-Fi + Bluetooth 5 (LE) | 运行 BLE GATT 服务，吞吐速率达 5Hz，低延迟双向交互 |
 
 ---
 
-## 3. 完整引脚与外设映射总表
+## 3. 工业设计与 3D 打印外壳方案库
+
+针对黑客松答辩展示与床头日常使用，本项目在 [`3d_models/`](3d_models/) 目录中提供了完整的参数化 OpenSCAD 建模源码、经过水密性检查（Watertight Manifold）的 STL 打印切片文件以及高精度概念渲染图。
+
+| 外壳方案 | 适用场景 | 核心特点与对应资产 |
+| :--- | :--- | :--- |
+| **Form B 经典前开窗版**<br>*(推荐打印)* | 日常卧室床头、黑客松正式答辩 | 尺寸 165 × 55 mm，完美贴合 1.69 寸彩屏与触摸区域，预留麦克风收音槽、音腔开孔与侧边 Type-C 线槽。<br>• 打印文件：[`wake_box_form_b_165x55.stl`](3d_models/wake_box_form_b_165x55.stl)<br>• 建模源工程：[`wake_box_form_b_165x55.scad`](3d_models/wake_box_form_b_165x55.scad) |
+| **Form B 极简无屏版** | 极致“零光污染”偏好者 | 顶面完全平整闭合，无屏幕反光，依靠顶置柔和暖色 LED 环光与多音节离线语音进行反馈交互。<br>• 打印文件：[`wake_box_final_screenless.stl`](3d_models/wake_box_final_screenless.stl) |
+| **Form A 倾角托架版** | 桌面工位、床头柜平视观览 | 具有 30° 黄金视线倾斜角度，便于手指直接按压触摸屏。<br>• 建模源码：[`wake_box_angled.scad`](3d_models/wake_box_angled.scad) |
+| **MVP 极简开放盒** | 快速验证与现场调试 | 耗时最短（约 1.5 小时），全开放式插拔传感器与排线。<br>• 打印文件：[`wake_box_mvp_open.stl`](3d_models/wake_box_mvp_open.stl) |
+
+<p align="center">
+  <img src="3d_models/wake_box_form_b_165x55_render.jpg" alt="Form B 前开窗版渲染图" width="48%">
+  <img src="3d_models/wake_box_screenless_165x55_render.jpg" alt="Form B 极简无屏版渲染图" width="48%">
+</p>
+
+> [!TIP]
+> 推荐打印参数：耗材选用 **PLA+ 或 PETG（深空灰 / 哑光黑）**，层高 `0.2mm`，填充率 `15%~20%`，壁厚 `3 圈`。详细打印指引请查看 [`3d_models/README.md`](3d_models/README.md)。
+
+---
+
+## 4. 完整引脚与外设映射总表
 
 ```
               ESP32-S3-Korvo-2 V3 核心引脚映射
 ┌───────────────────────────────────────────────────────────────┐
 │ [ST7789 LCD]       MOSI: 0  | SCLK: 1  | DC: 2   | CS: 46     │
-│ [I2S 音频流]       MCLK: 16 | BCLK: 9  | WS: 45  | DOUT: 8 (DAC)
+│ [I2S 音频流]       MCLK: 16 | BCLK: 9  | WS: 45  | DOUT: 8 (DAC)│
 │                    DIN: 10 (ADC麦克风) | PA使能: 48           │
 │ [共享 I2C 总线]    SDA: 17  | SCL: 18  (@ 400kHz)              │
 │                    • 0x15: CST816S 电容触摸                   │
 │                    • 0x18: ES8311 播放 DAC                    │
 │                    • 0x38: TCA9554A IO 扩展器 (P1=背光硬切)    │
-│                    • 0x40: ES7210 麦克风录音 ADC               │
-│                    • 0x23: (外接) BH1750 环境光照传感器        │
-│                    • 0x76: (外接) SPA06/SPL06 高精度气压温度计 │
-│ [板载物理按键]     GPIO 5 (ADC1 Channel 4, 12-bit 分压检测)   │
-│ [外接扩展 GPIO]    GPIO 19: AM412 PIR 人体红外信号             │
-│                    GPIO 20: WS2812 8颗 RGB 灯环 (RMT驱动)     │
+│                    • 0x40: ES7210 录音 ADC (双麦克风增益+30dB)│
+│                    • 0x23: BH1750 外接高精度光敏传感器        │
+│                    • 0x76: SPA06 外接高精度温湿度气压计       │
+│ [WS2812 灯环]      GPIO 20 (RMT 驱动通道)                      │
+│ [PIR 人体红外]     GPIO 19 (高电平有效)                       │
+│ [6键矩阵分压器]    GPIO 5 (ADC1 Channel 4)                    │
 └───────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. 固件分区与非破坏性双 OTA 机制
+## 5. 固件分区与非破坏性双 OTA 机制
 
 为了保护开发板出厂预装的原厂小智 AI 语音大模型固件不被破坏，我们采用了**无损 OTA1 独立烧录方案**：
 
@@ -98,148 +156,89 @@ Flash 物理地址布局 (16MB Total):
 
 - **当前引导状态**：`otadata` 已经被切换指向 `ota_1`（`otadata_ota1.bin`）。
 - **烧录目标地址**：**永远只烧录到 `0x730000`**，绝不擦除 `0x330000`，绝不擦除 `0x010000`！
-- **如何一键恢复原厂固件**：
+- **一键恢复原厂固件命令**：
   ```bash
   esptool --chip esp32s3 --port /dev/cu.usbmodem5B790674601 write-flash 0x00e000 backup_otadata.bin
   ```
 
 ---
 
-## 5. 工具链、编译与一键烧录指南
+## 6. 板载语音交互系统：端侧 VAD 与云端 Relay
 
-### 环境依赖（macOS Apple Silicon 适配特别说明）
-Arduino 官方提供的 x86_64 `ctags` 在 macOS Apple Silicon 上会导致编译闪退。本项目已放置通用 ARM64 兼容 Shim：
-- `ctags` 路径：`/Users/hancg/Library/Arduino15/packages/builtin/tools/ctags/5.8-arduino11/ctags`
-- 编译器路径：`"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"`
-- 烧录器路径：`/Users/hancg/Library/Arduino15/packages/esp32/tools/esptool_py/5.3.1/esptool`
-- 物理串口：`/dev/cu.usbmodem5B790674601`（WCH CH343 高速串口）
+Wake 拥有完整的双模态语音能力：既能在无网环境下通过**板载离线语音引擎**播报多音节清晨诊断，又能在 Wi-Fi 连通时调用**局域网大模型语音中枢 (Voice Relay)** 对话与操控。
 
-### 编译命令
+### 1. 端侧轻量自适应语音检测 (`display_name/speech_detect.h`)
+纯 C++ 编写的无依赖 VAD 状态机，专为嵌入式低算力与噪声环境打磨：
+- **自适应动态底噪追踪**：冷启动（1s）采样环境本底噪声，并根据环境声音缓慢自适应抬高噪声门限（上限 4000 RMS）。
+- **抗瞬态冲击防误触**：连续 3 帧（48ms）超过起讲门限才触发，滤除拍桌子、关门等单脉冲冲击声。
+- **智能预滚动缓冲区**：保留说话前 14 帧（约 224ms）PCM 音频，确保“小夜”首字发音完整不被切断。
+- **自动收尾与长语音截断**：检测到连续 44 帧（约 700ms）静音即判定说话结束；最大截断为 24 秒，防内存溢出。
+- **单元测试验证**：`tools/test_speech_detect.cpp` 在 PC 端通过 11 项声学模拟用例（含强持续空调噪声、开机即嘈杂等极限场景）。
+
+### 2. 局域网大模型中转中枢 (`voice_relay/server.py`)
+采用 Python 标准库实现，零第三方包依赖，为 ESP32 语音交互提供工业级鲁棒性：
+- **唤醒词门控**：识别包含“小夜”、“晓夜”等唤醒词；对话后提供连续追问窗口（锚定在播放完毕时刻）。
+- **防拦截与智能重试**：模拟标准 UA 穿透 Cloudflare；捕获对端断开异常自动进行 1.5s/3.0s 指数退避重试；区分读超时避免重复计费。
+- **TTS 熔断保护与降级**：上游 TTS 连续报错 2 次触发 60 秒自动熔断，降级返回控制指令，端侧由板载蜂鸣/离线语音兜底确认。
+- **Whisper 繁简纠错与静音幻觉过滤**：内置高频字映射表；过滤无意义标点或海外媒体幻觉字幕。
+- **意图识别与清晨记梦**：支持直接触发指令（`开始守夜` $\rightarrow$ `N:1`，`结束守夜` $\rightarrow$ `N:2`）；记录梦境写入本地 `notes.jsonl`。
+
+### 3. 板载离线中文语音（无网全自动）
+- 固件内嵌约 35 个预录中文词素（`display_name/voice_data.h`），无需连接电脑或网络。
+- 播报真实的睡眠卫生得分、噪音超标次数、最大分贝、漏光次数、起夜次数并给出对应改进建议。
+- 生成工具：`python3 tools/gen_voice.py`（基于 macOS TTS 词库自动切片编码）。
+
 > [!IMPORTANT]
-> 必须传入 `--build-property build.maximum_size=4194304`，以放开 4MB 分区限制（默认模板限制为 1.3MB，BLE 编译会超限报错）。
+> **绝对隐私保护红线**：一旦进入「守夜模式」（Night Mode），固件在硬件逻辑层**彻底关闭录音与网络上传任务**，麦克风仅在本地用于计算分贝包络。只有在白天清醒状态下，才会监听唤醒词。
 
-```bash
-"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" compile \
-  --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,FlashMode=qio" \
-  --build-property build.maximum_size=4194304 \
-  --build-path /Users/hancg/Desktop/hackathon/display_name/build \
-  /Users/hancg/Desktop/hackathon/display_name
+---
+
+## 7. WS2812 8-LED 环形灯控制与 RMT 驱动
+
+Wake 板载了一圈 8 颗 WS2812B RGB 灯珠（GPIO 20），由 ESP32-S3 专用硬件 RMT 外设驱动，纳秒级时序极度精准：
+1. **起夜微光小夜灯**：夜间监测到人体红外触发或翻身按键时，柔和点亮 1~2 颗微弱琥珀色灯光（5 Lux），起夜不晃眼，离开后自动熄灭。
+2. **精细化控制指令**：
+   - `L:idx,r,g,b`：指定单颗灯珠调色（`idx` 为 0~7；若为 `-1` 则全盘调色）。
+   - `L:A,r,g,b`：全局全开并设定统一色彩。
+   - `L:B,r0,g0,b0,r1,g1,b1...`：单条指令一次性下发全部 8 颗灯珠的独立 RGB 色彩阵列。
+3. **Web 端可视化调控**：在 Web 仪表盘上提供交互式环形灯珠拾色器与彩虹呼吸灯预设，实时同步灯光状态。
+
+---
+
+## 8. BLE GATT 通信协议与数据结构
+
+设备广播名称为 `ESP32S3_WakeBox`，基于自定义 GATT 服务实现高频（5Hz）遥测与全功能反向控制。
+
+- **Service UUID**：`6E400001-B5A3-F393-E0A9-E50E24DCCA9E`
+- **Notify 特征值**：`6E400003-B5A3-F393-E0A9-E50E24DCCA9E`（板子 $\rightarrow$ 前端，5Hz 实时状态包）
+- **Write 特征值**：`6E400002-B5A3-F393-E0A9-E50E24DCCA9E`（前端 $\rightarrow$ 板子，反向控制指令）
+
+### 1. 上报数据包格式 (Notify)
+以逗号分隔的 ASCII 明文字符串，极易调试与解析：
 ```
-
-### 烧录命令（以 921600 高速烧录至 ota_1）
-```bash
-/Users/hancg/Library/Arduino15/packages/esp32/tools/esptool_py/5.3.1/esptool \
-  --chip esp32s3 \
-  --port /dev/cu.usbmodem5B790674601 \
-  --baud 921600 \
-  write-flash 0x730000 /Users/hancg/Desktop/hackathon/display_name/build/display_name.ino.bin
+<当前页>,<当前分贝>,<最大分贝>,<光照Lux>,<气压hPa>,<温度℃>,<夜间模式>,<起夜次数>,<噪音事件数>,<漏光次数>,<得分>,<音量>,<静音状态>
 ```
+*示例*：`1,42.5,68.2,0.0,1013.25,24.8,1,2,1,0,88,60,0`
+
+### 2. 控制指令总表 (Write)
+| 指令格式 | 说明 |
+| :--- | :--- |
+| `P:<0~4>` | 远程切换屏幕显示页面（0:封面, 1:传感器矩阵, 2:夜间守夜, 3:晨间报告, 4:系统设置） |
+| `N:<0/1/2>` | 守夜状态控制（`N:1` 开始守夜硬件断背光，`N:2` 结束守夜触发晨报，`N:0` 退出） |
+| `V:<0~100>` | 设置开发板喇叭输出音量 |
+| `M:<0/1>` | 静音 / 取消静音 |
+| `S:<1~6>` | 播放内置提示音效（欢迎和弦、入睡柔和音、早安日出音、警告哔声等） |
+| `E:<3/4/5>` | 远程注入模拟夜间事件（`E:3` 瞬态噪音 68dB，`E:4` 起夜事件，`E:5` 晨光漏光） |
+| `L:idx,r,g,b` | WS2812 8-LED 环形灯珠指定单颗/整环调色 |
+| `L:A,r,g,b` / `L:B,...` | 环形灯全开调色或 8 灯批量色彩同步 |
+| `C:<ssid>\|<pwd>\|<srv>` | 蓝牙空中 Wi-Fi 配网，下发 SSID、密码和语音中转服务地址写入 NVS |
+| `K:<1~6>` | 远程模拟按下板载 K1~K6 物理微动按键 |
 
 ---
 
-### 板载离线中文语音（开发板喇叭自己说话）
-- 语音在固件内，不依赖电脑和网络。晨报文案由约 35 个预录词拼接而成，能念出真实的得分、噪音次数与最大分贝、漏光次数、起夜次数和一条建议。
-- 词库由 `tools/gen_voice.py` 用 macOS `say` 生成到 `display_name/voice_data.h`。**必须在你自己的终端运行**（沙箱里 `say` 输出为空）：
-  ```bash
-  python3 tools/gen_voice.py --check          # 先确认 say 能出声
-  python3 tools/gen_voice.py                  # 默认 Tingting；可加 --voice Flo
-  ```
-- 仓库里当前的 `voice_data.h` 如果标注为 `DUMMY`，那只是编译用的占位蜂鸣音，**必须重新生成后再烧录**。
-- 触发方式：开发板上点「查看晨间报告」、K3/K6 结束守夜、网页点「早安 · 语音报告」（N:2）。开始守夜时会说“晚安，开始守夜”。
-- 网页的电脑朗读默认关闭（避免与板子重复念），在晨报卡片里勾选后才会同时朗读。
+## 9. 外接四大传感器防呆插线图
 
-## 6. BLE GATT 通信协议与数据结构
-
-- **设备广播名称**：`Korvo-刘航成&夏工`
-- **Service UUID**：`4fafc201-1fb5-459e-8fcc-c5c9c331914b`
-- **Characteristic UUID**：`beb5483e-36e1-4688-b7f5-ea07361b26a8`（属性：READ | WRITE | NOTIFY）
-
-### 1. 下发控制指令（Write Without Response）
-| 字符串指令 | 作用说明 | 示例 |
-| :--- | :--- | :--- |
-| `P:<0~4>` | 远程切换开发板屏幕当前页面 | `P:0` 切到 Wake 睡眠盒页，`P:1` 切到声谱页 |
-| `N:1` | **触发开始熄屏守夜**（硬件切断背光，播放催眠音阶，清零夜间计数） | `N:1` |
-| `N:2` | **触发早晨唤醒复盘**（背光亮起，播放日出和弦，输出评分） | `N:2` |
-| `W:4` | 守夜期间**模拟一次起夜**（PIR 触发 + 亮微弱暖光 8 秒） | `W:4` |
-| `W:5` | 守夜期间**模拟一次漏光**（光照异常计数 +1） | `W:5` |
-| `S:<1~4>` | 播放板载合成音效（1=欢迎和弦, 2=门铃, 3=警报, 4=音阶） | `S:1` |
-| `S:7` | 日出和弦 + 板载喇叭离线中文语音晨报（无报告时提示先守夜） | `S:7` |
-| `V:<0~100>`| 调节喇叭输出音量 | `V:80` |
-
-### 2. 开发板上报数据（Notify 4~5Hz 交替推送两种包）
-- **包类型 A：传感器实时流**
-  ```json
-  {
-    "page": 0,          // 当前屏幕页码 (0..4)
-    "db": 42.5,         // 板载麦克风实时分贝 (30~95 dB)
-    "pct": 12,          // 瞬时音量峰值百分比 (0~100%)
-    "mv": 3280,         // GPIO 5 ADC 按键毫伏值
-    "key": 0,           // 当前按下的物理按键 (0=无, 1~6=K1~K6)
-    "vol": 80,          // 喇叭音量
-    "pir": 0,           // PIR 状态 (0=无动静, 1=有人)
-    "lux": -1,          // BH1750 光照 (-1 表示未接，>=0 为实际 lx)
-    "temp": 0.0,        // SPA06 温度 (°C)
-    "pres": 0.0,        // SPA06 气压 (hPa)
-    "spa": 0            // SPA06 是否在位 (0=离线, 1=在线)
-  }
-  ```
-- **包类型 B：Wake 睡眠盒专用健康诊断包 (`w: 1`)**
-  ```json
-  {
-    "w": 1,
-    "night": 1,         // 是否正在熄屏守夜 (1=是, 0=否)
-    "rep": 0,           // 是否生成了晨间报告 (1=已生成)
-    "score": 78,        // 综合睡眠环境评分 (0~100 分)
-    "ne": 2,            // 整夜噪音冲击事件次数 (>55dB)
-    "nmax": 68.2,       // 噪音最大峰值分贝 (dB)
-    "le": 1,            // 夜间漏光异常次数 (>5lx，与固件 update_wake_engine 一致)
-    "we": 1,            // 夜间起夜离床次数
-    "wsec": 180,        // 起夜累计持续秒数
-    "adv": 2,           // 智能归因建议编号 (1..5)
-    "tmin": 18.5,       // 夜间最低室温
-    "tmax": 24.1,       // 夜间最高室温
-    "tbad": 0,          // 室温偏离舒适区(16~25°C)的秒数
-    "dur": 28800,       // 守夜持续总时长 (秒)
-    "wact": 0           // 当前是否正在起夜活动中
-  }
-  ```
-
----
-
-## 7. 板载外设驱动与算法细节
-
-### 1. 真正的“零光污染”硬熄屏（TCA9554 P1 切断背光）
-- 普通屏幕把全屏画成黑色，背光仍然在漏光发灰，严重破坏深度睡眠。
-- Wake 方案通过 `i2c_write_reg(0x38, 0x01, out & ~0x02)` 直接由 `TCA9554` 芯片切断背光驱动管供电，实现物理 **0.00 Lux 纯粹全黑**。
-- 唤醒时重新拉高 Bit 1，背光瞬间无感亮起。
-
-### 2. 噪音冲击算法（仅提取声压包络，绝不录制音频）
-- 音频由 `ES7210` 以 16kHz 16-bit 持续读入。
-- 每 256 采样点去除直流偏移，计算均方根声压级：
-  $$\text{dB} = 28.0 + 16.5 \times \log_{10}(\text{RMS})$$
-- 设立自适应底噪基线 `noise_baseline`。只有当 $\text{dB} > \max(\text{baseline} + 12, 50\text{dB})$ 且时间窗间隔 $> 3\text{s}$ 时，才记为一次突发事件，并记录最大分贝。
-- **设备自身播放提示音时自动静音滤波 900ms**，绝不产生“自己发声把自己当噪音”的死循环。
-
-### 3. ADC 6 按键矩阵（GPIO 5）电压识别阈值
-根据 KSDIY 原厂标准分压电阻网络测试标定：
-- `K1 (翻页/上一页)`：`150mV ~ 600mV`（标称 380mV）
-- `K2 (翻页/下一页)`：`600mV ~ 1000mV`（标称 820mV）
-- `K3 (守夜开关/唤醒)`：`1000mV ~ 1375mV`（标称 1180mV）
-- `K4 (守夜中模拟起夜)`：`1375mV ~ 1775mV`（标称 1570mV）
-- `K5 (守夜中模拟漏光)`：`1775mV ~ 2195mV`（标称 1980mV）
-- `K6 (早安报告/门铃)`：`2195mV ~ 2680mV`（标称 2410mV）
-- `未按下`：`> 2800mV`（上拉至约 3.28V）
-
-### 4. CST816S 触摸与滑动算法
-- 固件在竖屏配置下经过逆向校准的转换公式：
-  $$x = (240 - \text{raw\_y}) + 20,\quad y = \text{raw\_x}$$
-- 当手指拖动距离 $|\Delta x| \ge 34$ 时触发左右切页，带 4 阶水平平滑移位双缓冲动画。
-
----
-
-## 8. 外接四大传感器防呆插线图
-
-现场插线只需 30 秒，按此表对齐排针：
+现场插线只需 30 秒，按此表对齐外接排针：
 
 ```
       ESP32-S3 Korvo 2 V3 传感器插针定义
@@ -249,37 +248,62 @@ Arduino 官方提供的 x86_64 `ctags` 在 macOS Apple Silicon 上会导致编�
 └──────────────────────────────────────────────────┘
 ```
 
-1. **☀️ BH1750 光照传感器**：
-   - `VCC` → `3.3V`，`GND` → `GND`，`SCL` → `GPIO 18`，`SDA` → `GPIO 17`，`ADDR` 悬空或接地（地址 `0x23`）。
-2. **🌡️ SPA06 气压温度传感器**：
-   - 与光照传感器**并联共用** `3.3V`, `GND`, `SDA(17)`, `SCL(18)`。地址为 `0x76`，总线完全兼容，绝不冲突。
-3. **🚶 AM412 PIR 人体红外**：
-   - `VCC` → `3.3V`，`GND` → `GND`，`OUT` → **`GPIO 19`**。
-4. **💡 WS2812 8颗 RGB 灯环**：
-   - `VCC` → `5V`（或 `3.3V`），`GND` → `GND`，`DI`（数据输入）→ **`GPIO 20`**。
+1. **☀️ BH1750 光照传感器**：`VCC` $\rightarrow$ `3.3V`，`GND` $\rightarrow$ `GND`，`SCL` $\rightarrow$ `GPIO 18`，`SDA` $\rightarrow$ `GPIO 17`，`ADDR` 悬空或接地（I2C 地址 `0x23`）。
+2. **🌡️ SPA06 气压温度传感器**：并联共用 `3.3V`, `GND`, `SDA(17)`, `SCL(18)`。I2C 地址 `0x76`，总线完全兼容，绝无地址冲突。
+3. **🚶 AM412 PIR 人体红外**：`VCC` $\rightarrow$ `3.3V`，`GND` $\rightarrow$ `GND`，`OUT` $\rightarrow$ **`GPIO 19`**。
+4. **💡 WS2812 8颗 RGB 灯环**：`VCC` $\rightarrow$ `5V`（或 `3.3V`），`GND` $\rightarrow$ `GND`，`DI`（数据输入）$\rightarrow$ **`GPIO 20`**。
 
 ---
 
-## 9. Web Bluetooth 前端架构与黑科技
+## 10. Web Bluetooth 前端控制台与黑科技
 
-- **访问地址**：`http://localhost:8765/ble_dashboard.html`
-- **本地服务命令**：`python3 -m http.server 8765 --directory /Users/hancg/Desktop/hackathon`
-- **为什么必须是 http://localhost**：Chrome 安全策略严禁直接双击 `file://` 调用 `navigator.bluetooth`，只有在 Localhost 或 HTTPS 下才开放。
+Wake 的前端 [`ble_dashboard.html`](ble_dashboard.html) 采用现代化深色玻璃拟态设计，基于 Chrome 原生 Web Bluetooth API 实现免装 App、开箱即用的跨平台控制。
 
-### 前端实现的四大亮点能力：
-1. **Web Speech API 自然中文人声早安播报**：
-   点击晨报时，利用 `window.speechSynthesis` 朗读完整的口语化诊断：
-   *“早安，刘航成、夏工！昨晚你的卧室睡眠环境健康得分为 XX 分。整夜监测到 X 次突发噪音，最高达 XX 分贝；夜间漏光 X 次；起夜 X 次。AI 环境诊断建议：……”*
-2. **Apple Watch 睡眠分期 × Wake 卧室环境 双轨交叉印证卡片**：
-   上轨展示手表测得的异常清醒点（03:18），下轨对齐展示 Wake 测得的噪音突发点（03:15 64dB），形成最强说服力的软硬件协同图景。
-3. **Web Audio 纯算法实时合成白噪音电台**：
-   运用粉红/布朗噪声生成器与双二阶滤波算法（BiquadFilterNode），纯前端合成雨声、海浪、篝火，0 外部音频资源依赖。
-4. **Voice Dream Journal 清晨记梦本**：
-   输入梦境意象，结合昨晚睡眠生理修复度给出温暖的心理学解析。
+- **本地启动与访问**：
+  ```bash
+  python3 -m http.server 8765
+  # 浏览器打开 http://localhost:8765/ble_dashboard.html
+  ```
+
+### 核心亮点功能：
+1. **Apple Watch 睡眠分期 × Wake 卧室环境 双轨交叉印证卡片**：
+   上轨展示手表测得的异常清醒点（03:18），下轨精准对齐展示 Wake 测得的突发噪音事件（03:15 64dB），形成最强说服力的“手环测人、守夜盒测房间”软硬件因果对齐图谱。
+2. **WS2812 8-LED 环形灯交互调色盘**：
+   包含 8 颗独立虚拟灯珠拾色器、全局开关、全彩滑块以及彩虹流动、呼吸流水灯等动画预设，实时双向同步硬件灯珠色彩。
+3. **空中蓝牙一键 Wi-Fi 配网器**：
+   无需串口或输入烧录代码，直接在网页输入 Wi-Fi 名称、密码及本地语音中转服务地址，一键写入板载 NVS，立即联网。
+4. **Web Audio 纯数学算法实时合成白噪音电台**：
+   运用双二阶滤波算法（BiquadFilterNode）与粉红/布朗噪声生成器，纯前端合成雨声、海浪、壁炉篝火，0 外部音频资源依赖。
+5. **Web Speech API 智能早安晨报播报与清晨记梦本**：
+   结合多传感器汇总数据生成诊断，并提供梦境录入与心理学意象解析。
 
 ---
 
-## 10. 三分钟黑客松现场演示 (Pitch) 剧本
+## 11. 工具链、编译与一键烧录指南
+
+### 环境依赖（macOS Apple Silicon 适配特别说明）
+Arduino 官方提供的 x86_64 `ctags` 在 macOS Apple Silicon 上会导致编译闪退。本项目已放置通用 ARM64 兼容 Shim：
+- `ctags` 路径：`/Users/hancg/Library/Arduino15/packages/builtin/tools/ctags/5.8-arduino11/ctags`
+- 编译器路径：`"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"`
+- 烧录器路径：`/Users/hancg/Library/Arduino15/packages/esp32/tools/esptool_py/5.3.1/esptool`
+- 物理串口：`/dev/cu.usbmodem5B790674601`（WCH 高速串口）
+
+### 一键编译与烧录脚本 (`flash.sh`)
+项目根目录提供了高度自动化的一键脚本：
+```bash
+./flash.sh            # 自动执行完整编译、烧录至 ota_1 并捕获 8 秒启动串口日志
+./flash.sh --quick    # 跳过编译，直接将上次构建产物烧录进开发板
+./flash.sh --log-only # 不编译不烧录，仅监听串口输出 (可通过 LOG_SECONDS=30 调整捕获时长)
+```
+
+---
+
+## 12. Demo Day 路演剧本与自动化 Presentation
+
+### 1. 自动化 Presentation Deck (`generate_deck.py`)
+本项目附带自动化 Google Slides 演示幻灯片生成脚本 [`generate_deck.py`](generate_deck.py) 与批量操作数据 [`batch.json`](batch.json)，包含全套深色赛博风格的封面、痛点对比、软硬件架构与现场 Demo 流程幻灯片。
+
+### 2. 三分钟黑客松现场演示 (Pitch) 剧本
 
 ```
 [0:00 - 0:40] 痛点阐述
@@ -294,17 +318,26 @@ Arduino 官方提供的 x86_64 `ctags` 在 macOS Apple Silicon 上会导致编�
 我们没有开摄像头——因为在全黑卧室里摄像头既拍不到东西，又侵犯隐私。
 我们用双麦克风分贝包络、微型红外和高精度光温传感器守着房间。”
 
-[1:20 - 2:10] 模拟夜间三大环境破坏事件
+[1:20 - 2:00] 模拟夜间三大环境破坏事件
 “现在我们在卧室睡着了：
 ① 半夜窗外有大卡车开过——（在桌上用力拍一下，制造 65dB 噪音）
-② 睡到一半起来上厕所——（晃动 PIR 或按 K4，灯环柔和亮起一颗微弱暖光，不刺眼）
-③ 清晨天亮窗帘没拉严——（手电照一下光敏或按 K5，漏光被记录）”
+② 睡到一半起来上厕所——（晃动 PIR，WS2812 环形灯柔和点亮一颗微弱暖色琥珀光，不刺眼）
+③ 清晨天亮窗帘没拉严——（手电照一下光敏，漏光事件被记录）”
 
-[2:10 - 3:00] 早晨一键唤醒与自然人声复盘
-“早晨闹钟响了，我碰一下屏幕（或点击晨报）：
-（板载喇叭奏响日出和弦，屏幕亮起打出 76 分；
-电脑音箱主动发出自然语音：‘早安！昨晚卧室得分 76 分，主因是夜间突发噪音，建议关紧窗户’）
+[2:00 - 2:40] 醒来语音交互与自然人声复盘
+“早晨醒来，我对板子说：‘小夜，结束守夜’。
+板子麦克风通过自适应 VAD 检测到说话，上传局域网 Relay，喇叭播放早安回复并退出守夜；
+屏幕亮起打出 76 分，板载扬声器同步念出多音节晨报：
+‘早安！昨晚卧室得分 76 分，主因是夜间突发噪音，建议关紧窗户’。
 最后看大屏幕——我们把 Wake 的环境时间线与 Apple Watch 的浅睡清醒数据完全对齐，
-清清楚楚告诉用户：你 03:18 的醒来，正是因为 03:15 窗外有 64 分贝的重卡噪音！
-这就是 Wake，让每个睡眠焦虑的人，重新找回睡个好觉的环境。”
+清清楚楚告诉用户：你 03:18 的醒来，正是因为 03:15 窗外有 64 分贝的重卡噪音！”
+
+[2:40 - 3:00] 结语
+“这就是 Wake：全栈软硬一体交付，有温度的卧室守夜人。谢谢大家！”
 ```
+
+---
+
+## 📄 开源许可证
+
+本项目基于 [MIT 许可证](LICENSE) 开源。欢迎广大创客与睡眠健康关注者 Star、Fork 与二次开发！
